@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { familyOf, FONTS, loadFont, type FontWeight } from './fonts';
+import { ProviderSettings } from './ProviderSettings';
 import { THEMES } from './themes';
 
 export interface Appearance {
@@ -30,13 +31,17 @@ const WEIGHTS: { value: FontWeight; label: string }[] = [
   { value: 700, label: 'Negrito' },
 ];
 
+export type SettingsSection = 'appearance' | 'assistant';
+
 interface Props {
   value: Appearance;
   onChange: (next: Appearance) => void;
   onClose: () => void;
+  section: SettingsSection;
+  onSection: (s: SettingsSection) => void;
 }
 
-export function Settings({ value, onChange, onClose }: Props) {
+export function Settings({ value, onChange, onClose, section, onSection }: Props) {
   const ref = useRef<HTMLDivElement>(null);
   const set = (patch: Partial<Appearance>) => onChange({ ...value, ...patch });
 
@@ -56,7 +61,23 @@ export function Settings({ value, onChange, onClose }: Props) {
   }, [onClose]);
 
   return (
-    <div className="settings" ref={ref} role="dialog" aria-label="Aparência">
+    <div className="settings" ref={ref} role="dialog" aria-label="Configurações">
+      <div className="segmented settings-sections" role="tablist" aria-label="Seção">
+        <button type="button" role="tab" aria-checked={section === 'appearance'} onClick={() => onSection('appearance')}>
+          Aparência
+        </button>
+        <button type="button" role="tab" aria-checked={section === 'assistant'} onClick={() => onSection('assistant')}>
+          Assistente
+        </button>
+      </div>
+      {section === 'assistant' ? <ProviderSettings /> : <AppearanceSettings value={value} set={set} />}
+    </div>
+  );
+}
+
+function AppearanceSettings({ value, set }: { value: Appearance; set: (patch: Partial<Appearance>) => void }) {
+  return (
+    <>
       <h3>Aparência</h3>
       <div className="settings-row">
         <label htmlFor="fdt-translucent">Translúcido</label>
@@ -197,6 +218,6 @@ export function Settings({ value, onChange, onClose }: Props) {
           );
         })}
       </div>
-    </div>
+    </>
   );
 }

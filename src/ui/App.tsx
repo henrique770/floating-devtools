@@ -1,10 +1,11 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type PointerEvent as ReactPointerEvent } from 'react';
 import type { DevtoolsStore } from '../content/store';
+import { AssistantTab } from './AssistantTab';
 import { ConsoleTab } from './ConsoleTab';
-import { IconClose, IconGear, IconMaximize, IconMinimize, Logo } from './Icons';
+import { IconClose, IconGear, IconMaximize, IconMinimize, IconSparkle, Logo } from './Icons';
 import { NetworkTab } from './NetworkTab';
 import { fontById, loadFont } from './fonts';
-import { DEFAULT_APPEARANCE, Settings, type Appearance } from './Settings';
+import { DEFAULT_APPEARANCE, Settings, type Appearance, type SettingsSection } from './Settings';
 import { themeById, themeVars, typographyVars } from './themes';
 import { usePersistentState } from './usePersistentState';
 
@@ -15,7 +16,7 @@ const SNAP = 36;
 const MIN_W = 320;
 const MIN_H = 220;
 
-type Tab = 'network' | 'console';
+type Tab = 'network' | 'console' | 'assistant';
 type Size = { w: number; h: number };
 type Viewport = { w: number; h: number };
 
@@ -273,7 +274,12 @@ interface PanelProps {
 const Panel = memo(function Panel({ hidden, store, snap, vp, button, size, onResize, maximized, onToggleMaximized, tab, onTab, onClose, appearance, onAppearance, panelPos, onPanelPos }: PanelProps) {
   const [liveSize, setLiveSize] = useState<Size | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsSection, setSettingsSection] = useState<SettingsSection>('appearance');
   const closeSettings = useCallback(() => setSettingsOpen(false), []);
+  const openProviderSettings = useCallback(() => {
+    setSettingsSection('assistant');
+    setSettingsOpen(true);
+  }, []);
   const resize = useRef<{ x: number; y: number; w: number; h: number; last: Size } | null>(null);
 
   const [livePos, setLivePos] = useState<{ left: number; top: number } | null>(null);
@@ -379,6 +385,10 @@ const Panel = memo(function Panel({ hidden, store, snap, vp, button, size, onRes
             {snap.errors > 0 && <span className="fdt-count is-error">{snap.errors}</span>}
             {snap.warnings > 0 && <span className="fdt-count is-warn">{snap.warnings}</span>}
           </button>
+          <button type="button" role="tab" aria-selected={tab === 'assistant'} className="fdt-tab" onClick={() => onTab('assistant')}>
+            <IconSparkle width={12} height={12} className="fdt-tab-icon" />
+            Assistant
+          </button>
         </div>
         <div
           className="fdt-drag-zone"
@@ -390,7 +400,7 @@ const Panel = memo(function Panel({ hidden, store, snap, vp, button, size, onRes
             type="button"
             className={`fdt-icon-btn fdt-gear${settingsOpen ? ' is-active' : ''}`}
             onClick={() => setSettingsOpen(!settingsOpen)}
-            title="Aparência e temas"
+            title="Configurações"
           >
             <IconGear />
           </button>
@@ -403,12 +413,23 @@ const Panel = memo(function Panel({ hidden, store, snap, vp, button, size, onRes
         </div>
       </header>
       <div className="fdt-body">
-        {settingsOpen && <Settings value={appearance} onChange={onAppearance} onClose={closeSettings} />}
+        {settingsOpen && (
+          <Settings
+            value={appearance}
+            onChange={onAppearance}
+            onClose={closeSettings}
+            section={settingsSection}
+            onSection={setSettingsSection}
+          />
+        )}
         <div className="fdt-tab-content" hidden={tab !== 'network'}>
           <NetworkTab store={store} requests={snap.requests} recording={snap.recording} width={place.w} />
         </div>
         <div className="fdt-tab-content" hidden={tab !== 'console'}>
           <ConsoleTab store={store} logs={snap.logs} active={!hidden && tab === 'console'} />
+        </div>
+        <div className="fdt-tab-content" hidden={tab !== 'assistant'}>
+          <AssistantTab store={store} snap={snap} active={!hidden && tab === 'assistant'} onOpenSettings={openProviderSettings} />
         </div>
       </div>
       {!maximized && (

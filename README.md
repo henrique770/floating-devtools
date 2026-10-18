@@ -34,13 +34,18 @@ Abra `chrome://extensions` (ou `brave://extensions`), ative o **Modo do desenvol
   Headers / Payload / Preview / Response / Timing e "Copiar como cURL".
 - **Console**: níveis, filtro, objetos expansíveis, mensagens repetidas agrupadas, erros não tratados,
   e um prompt para executar JS na página (↑/↓ para o histórico).
+- **Assistant**: chat com IA que recebe como contexto um resumo do que foi capturado (erros e avisos do
+  console, requisições com falha e lentas, totais) — pergunte "Resuma os logs", "Recomende melhorias" etc.
+  Funciona com a sua própria API key (BYOK): **⚙ → Assistente**, cole a chave da DeepSeek e escolha o modelo.
+  A chave fica em `chrome.storage.local` e só o service worker a usa; headers, cookies e valores de query
+  string não são enviados. Novos providers compatíveis com a API da OpenAI entram em `src/shared/ai.ts`.
 
 ## Como funciona
 
 | Parte | Arquivo | Papel |
 | --- | --- | --- |
 | Hook na página (MAIN world, `document_start`) | `src/injected/main-world.ts` | intercepta `console.*`, erros, `fetch`, `XHR` e usa `PerformanceObserver` para os demais recursos |
-| Service worker | `src/background.ts` | `chrome.webRequest` completa status, headers, IP e cache de recursos estáticos; ícone e atalho |
+| Service worker | `src/background.ts` | `chrome.webRequest` completa status, headers, IP e cache de recursos estáticos; ícone e atalho; chamadas ao provider de IA (streaming) |
 | Content script | `src/content/` | store com atualização em lote e UI em React dentro de Shadow DOM (o CSS do site não interfere) |
 | UI | `src/ui/` | botão, painel, abas |
 
