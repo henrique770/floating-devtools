@@ -2,7 +2,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState, useSyncExterna
 import type { DevtoolsStore } from '../content/store';
 import { AssistantTab } from './AssistantTab';
 import { ConsoleTab } from './ConsoleTab';
-import { IconClose, IconGear, IconMaximize, IconMinimize, IconSparkle, Logo } from './Icons';
+import { IconAssistant, IconClose, IconGear, IconMaximize, IconMinimize, Logo } from './Icons';
 import { NetworkTab } from './NetworkTab';
 import { fontById, loadFont } from './fonts';
 import { DEFAULT_APPEARANCE, Settings, type Appearance, type SettingsSection } from './Settings';
@@ -386,7 +386,7 @@ const Panel = memo(function Panel({ hidden, store, snap, vp, button, size, onRes
             {snap.warnings > 0 && <span className="fdt-count is-warn">{snap.warnings}</span>}
           </button>
           <button type="button" role="tab" aria-selected={tab === 'assistant'} className="fdt-tab" onClick={() => onTab('assistant')}>
-            <IconSparkle width={12} height={12} className="fdt-tab-icon" />
+            <IconAssistant size={16} className="fdt-tab-icon" />
             Assistant
           </button>
         </div>

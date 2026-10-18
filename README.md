@@ -39,6 +39,8 @@ Abra `chrome://extensions` (ou `brave://extensions`), ative o **Modo do desenvol
   Funciona com a sua própria API key (BYOK): **⚙ → Assistente**, cole a chave da DeepSeek e escolha o modelo.
   A chave fica em `chrome.storage.local` e só o service worker a usa; headers, cookies e valores de query
   string não são enviados. Novos providers compatíveis com a API da OpenAI entram em `src/shared/ai.ts`.
+  As respostas usam a fonte e o tema escolhidos (inclusive nas cores do código), cada bloco de código tem
+  botão de copiar, e as conversas ficam salvas no histórico (🕘, até 50, com busca) para retomar depois.
 
 ## Como funciona
 

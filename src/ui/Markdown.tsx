@@ -1,4 +1,7 @@
-import { memo, type ReactNode } from 'react';
+import { memo, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { copyText } from './format';
+import { highlight } from './highlight';
+import { IconCheck, IconCopy } from './Icons';
 
 /** Inline `code`, **bold** and *italic*. Everything is rendered as text nodes (no HTML). */
 function inline(text: string): ReactNode[] {
@@ -24,17 +27,15 @@ export const Markdown = memo(function Markdown({ text }: { text: string }) {
   let i = 0;
   while (i < lines.length) {
     const line = lines[i];
-    const fence = line.match(/^\s*```(\w*)/);
+    const fence = line.match(/^\s*```([\w+#.-]*)/);
     if (fence) {
       const code: string[] = [];
       i++;
-      while (i < lines.length && !/^\s*```/.test(lines[i])) code.push(lines[i++]);
+      // Fences nested in a list are indented; drop that indentation from the code lines too.
+      const indent = new RegExp(`^ {0,${line.length - line.trimStart().length}}`);
+      while (i < lines.length && !/^\s*```/.test(lines[i])) code.push(lines[i++].replace(indent, ''));
       i++;
-      blocks.push(
-        <pre key={blocks.length} className="md-code">
-          {code.join('\n')}
-        </pre>,
-      );
+      blocks.push(<CodeBlock key={blocks.length} code={code.join('\n')} lang={fence[1]} />);
       continue;
     }
     const heading = line.match(/^(#{1,4})\s+(.*)/);
@@ -68,3 +69,33 @@ export const Markdown = memo(function Markdown({ text }: { text: string }) {
   }
   return <div className="md">{blocks}</div>;
 });
+
+function CodeBlock({ code, lang }: { code: string; lang: string }) {
+  const [copied, setCopied] = useState(false);
+  const tokens = useMemo(() => highlight(code, lang), [code, lang]);
+
+  useEffect(() => {
+    if (!copied) return;
+    const t = setTimeout(() => setCopied(false), 1500);
+    return () => clearTimeout(t);
+  }, [copied]);
+
+  return (
+    <div className="md-code">
+      <div className="md-code-head">
+        <span className="md-code-lang">{lang || 'código'}</span>
+        <button
+          type="button"
+          className="md-code-copy"
+          onClick={() => copyText(code).then(() => setCopied(true))}
+          title="Copiar código"
+          aria-label="Copiar código"
+        >
+          {copied ? <IconCheck /> : <IconCopy />}
+          {copied ? 'Copiado' : 'Copiar'}
+        </button>
+      </div>
+      <pre>{tokens}</pre>
+    </div>
+  );
+}

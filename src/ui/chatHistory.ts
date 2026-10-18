@@ -1,0 +1,71 @@
+import { useEffect, useState } from 'react';
+
+const HISTORY_KEY = 'ai.history';
+const MAX_CONVERSATIONS = 50;
+
+export type ChatEntry = { role: 'user' | 'assistant'; content: string; error?: boolean };
+
+export interface Conversation {
+  id: string;
+  title: string;
+  /** Host of the page the conversation started on. */
+  host: string;
+  provider?: string;
+  createdAt: number;
+  updatedAt: number;
+  messages: ChatEntry[];
+}
+
+const read = async () => ((await chrome.storage.local.get(HISTORY_KEY))[HISTORY_KEY] as Conversation[] | undefined) ?? [];
+
+/** Saved conversations (most recent first), shared by every tab and kept in sync. */
+export function useChatHistory(): Conversation[] {
+  const [list, setList] = useState<Conversation[]>([]);
+  useEffect(() => {
+    read().then(setList).catch(() => {});
+    const onChange = (changes: Record<string, chrome.storage.StorageChange>, area: string) => {
+      if (area === 'local' && HISTORY_KEY in changes) setList((changes[HISTORY_KEY].newValue as Conversation[]) ?? []);
+    };
+    chrome.storage.onChanged.addListener(onChange);
+    return () => chrome.storage.onChanged.removeListener(onChange);
+  }, []);
+  return list;
+}
+
+// Writes are chained so two quick saves never read the same stale list.
+let queue = Promise.resolve();
+const update = (fn: (list: Conversation[]) => Conversation[]) =>
+  (queue = queue
+    .then(async () => chrome.storage.local.set({ [HISTORY_KEY]: fn(await read()) }))
+    .catch(() => {}));
+
+export function saveConversation(conv: Conversation) {
+  return update((list) => [conv, ...list.filter((c) => c.id !== conv.id)].slice(0, MAX_CONVERSATIONS));
+}
+
+export function deleteConversation(id: string) {
+  return update((list) => list.filter((c) => c.id !== id));
+}
+
+export function clearHistory() {
+  return update(() => []);
+}
+
+export const newConversationId = () => `c${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+
+export function titleFrom(question: string) {
+  const line = question.trim().split('\n')[0];
+  return line.length > 70 ? `${line.slice(0, 70)}…` : line;
+}
+
+export function relativeTime(epoch: number) {
+  const diff = Date.now() - epoch;
+  const min = Math.round(diff / 60_000);
+  if (min < 1) return 'agora';
+  if (min < 60) return `há ${min} min`;
+  const h = Math.round(min / 60);
+  if (h < 24) return `há ${h} h`;
+  const d = Math.round(h / 24);
+  if (d < 7) return `há ${d} d`;
+  return new Date(epoch).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' });
+}
