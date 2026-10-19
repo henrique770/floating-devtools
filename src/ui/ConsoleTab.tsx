@@ -50,9 +50,11 @@ interface Props {
   logs: ConsoleEntry[];
   groups: LogGroup[];
   active: boolean;
+  /** Entry to reveal (navigation from Insights); the nonce makes repeated clicks re-trigger. */
+  focus?: { id: string; nonce: number };
 }
 
-export function ConsoleTab({ store, logs, groups, active }: Props) {
+export function ConsoleTab({ store, logs, groups, active, focus }: Props) {
   const [query, setQuery] = useState('');
   const [level, setLevel] = useState('all');
   const [origin, setOrigin] = useState('all');
@@ -112,6 +114,31 @@ export function ConsoleTab({ store, logs, groups, active }: Props) {
     const el = listRef.current;
     if (el && active && stickToBottom.current) el.scrollTop = el.scrollHeight;
   }, [visible, visibleGroups, active]);
+
+  useEffect(() => {
+    if (!focus) return;
+    const target = logs.find((l) => l.id === focus.id);
+    if (!target) return;
+    setQuery('');
+    setLevel('all');
+    setOrigin('all');
+    setPeriod('all');
+    if (grouped && target.group) setOpenGroups((prev) => new Set(prev).add(target.group!));
+    stickToBottom.current = false;
+    // Two frames: let the filter reset and the group expansion render first.
+    requestAnimationFrame(() =>
+      requestAnimationFrame(() => {
+        const list = listRef.current;
+        const sel = `[data-id="${CSS.escape(focus.id)}"]`;
+        const el = list?.querySelector<HTMLElement>(`.msg-group-members ${sel}`) ?? list?.querySelector<HTMLElement>(sel);
+        if (!el) return;
+        el.scrollIntoView({ block: 'center' });
+        el.classList.add('is-focused');
+        setTimeout(() => el.classList.remove('is-focused'), 1600);
+      }),
+    );
+    // Only on a new navigation request, not when logs change.
+  }, [focus]);
 
   const shown = grouped ? visibleGroups.length : visible.length;
 
@@ -232,7 +259,7 @@ const Message = memo(function Message({ entry: e, showTime, group }: MessageProp
   const icon = e.level === 'error' ? '✕' : e.level === 'warn' ? '⚠' : e.level === 'command' ? '›' : e.level === 'result' ? '‹' : '';
   const count = e.count && e.count > 1 ? e.count : 0;
   return (
-    <div className={`msg lvl-${e.level}`}>
+    <div className={`msg lvl-${e.level}`} data-id={e.id}>
       <span className="msg-icon">{icon}</span>
       {group ? (
         <button

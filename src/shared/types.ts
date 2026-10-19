@@ -51,6 +51,11 @@ export interface NetworkEntry {
   timing?: Timing;
   /** Set once the background webRequest data has been merged in. */
   webMatched?: boolean;
+  /**
+   * What chrome.webRequest saw for a fetch/XHR. The page only gets "Failed to fetch"; this tells
+   * whether the server actually answered (a hint of CORS) or the connection failed (net::ERR_*).
+   */
+  web?: { method: string; status: number; error?: string; responseHeaders?: Record<string, string> };
 }
 
 export type NetworkPatch = Partial<NetworkEntry> & { id: string };

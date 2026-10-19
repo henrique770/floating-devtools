@@ -1,7 +1,8 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { DevtoolsStore, Snapshot } from '../content/store';
-import { AI_PORT, type AiRequest, type AiResponse, type ChatMessage } from '../shared/ai';
-import { buildContext, SYSTEM_PROMPT } from './assistantContext';
+import { AI_PORT, type AiRequest, type AiResponse } from '../shared/ai';
+import { describeRedactions } from '../analysis/redact';
+import { buildContext, buildPayload } from './assistantContext';
 import {
   clearHistory,
   deleteConversation,
@@ -28,15 +29,17 @@ interface Props {
   snap: Snapshot;
   active: boolean;
   onOpenSettings: () => void;
+  /** Question prepared elsewhere (e.g. "Investigar com IA" in Insights), put in the input for review — never sent automatically. */
+  draft?: { text: string; nonce: number };
 }
 
-export function AssistantTab({ store, snap, active, onOpenSettings }: Props) {
+export function AssistantTab({ store, snap, active, onOpenSettings, draft }: Props) {
   const [config] = useAiConfig();
   const current = activeProvider(config);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState<false | 'waiting' | 'thinking' | 'streaming'>(false);
-  const [view, setView] = useState<'chat' | 'history'>('chat');
+  const [view, setView] = useState<'chat' | 'history' | 'context'>('chat');
   const history = useChatHistory();
   const meta = useRef<ConversationMeta | null>(null);
   // Set when this tab changed the conversation, so merely opening one from the history doesn't re-save it.
@@ -69,6 +72,18 @@ export function AssistantTab({ store, snap, active, onOpenSettings }: Props) {
 
   useEffect(() => () => port.current?.disconnect(), []);
 
+  useEffect(() => {
+    if (!draft) return;
+    setView('chat');
+    setInput(draft.text);
+    requestAnimationFrame(() => {
+      const el = inputRef.current;
+      if (!el) return;
+      el.focus({ preventScroll: true });
+      el.setSelectionRange(el.value.length, el.value.length);
+    });
+  }, [draft]);
+
   // Persist once the answer is complete (not on every streamed token).
   useEffect(() => {
     if (busy || !dirty.current || !meta.current || !messages.length) return;
@@ -87,10 +102,7 @@ export function AssistantTab({ store, snap, active, onOpenSettings }: Props) {
     if (!question || busy || !current) return;
     const thread: Message[] = [...messages.filter((m) => !m.error), { role: 'user', content: question }];
     // The context is rebuilt on every question, so the answer reflects what was captured up to now.
-    const payload: ChatMessage[] = [
-      { role: 'system', content: `${SYSTEM_PROMPT}\n\n# Dados capturados agora\n${buildContext(store.getSnapshot())}` },
-      ...thread.slice(-MAX_HISTORY).map(({ role, content }) => ({ role, content })),
-    ];
+    const payload = buildPayload(thread.slice(-MAX_HISTORY), buildContext(store.getSnapshot()).text);
     meta.current ??= { id: newConversationId(), title: titleFrom(question), host: location.host, createdAt: Date.now(), provider: current.provider.name };
     dirty.current = true;
     setView('chat');
@@ -177,10 +189,16 @@ export function AssistantTab({ store, snap, active, onOpenSettings }: Props) {
         >
           <IconHistory />
         </button>
-        <span className="ai-context" title="O que será enviado como contexto para a IA">
+        <button
+          type="button"
+          className={`ai-context${view === 'context' ? ' is-active' : ''}`}
+          onClick={() => setView(view === 'context' ? 'chat' : 'context')}
+          aria-pressed={view === 'context'}
+          title="Ver exatamente o que será enviado como contexto para a IA"
+        >
           Contexto: <b className={snap.errors ? 'is-error' : ''}>{snap.errors} erros</b> · <b className={snap.warnings ? 'is-warn' : ''}>{snap.warnings} avisos</b> ·{' '}
           <b className={failed ? 'is-error' : ''}>{failed} falhas</b> · {snap.requests.length} requisições
-        </span>
+        </button>
         <button type="button" className="ai-provider" onClick={onOpenSettings} title="Configurar provider">
           {current ? `${current.provider.name} · ${current.settings.model}` : 'Sem provider'}
         </button>
@@ -188,6 +206,8 @@ export function AssistantTab({ store, snap, active, onOpenSettings }: Props) {
 
       {view === 'history' ? (
         <HistoryList list={history} currentId={meta.current?.id} onOpen={open} onDelete={remove} />
+      ) : view === 'context' ? (
+        <ContextPreview snap={snap} onClose={() => setView('chat')} />
       ) : (
         <div
           className="ai-list"
@@ -249,7 +269,7 @@ export function AssistantTab({ store, snap, active, onOpenSettings }: Props) {
       <div className="ai-input">
         <textarea
           ref={inputRef}
-          rows={Math.min(5, input.split('\n').length)}
+          rows={Math.min(8, input.split('\n').length)}
           value={input}
           disabled={!current}
           placeholder={current ? 'Faça uma pergunta…' : 'Configure um provider para começar'}
@@ -271,6 +291,36 @@ export function AssistantTab({ store, snap, active, onOpenSettings }: Props) {
           </button>
         )}
       </div>
+    </div>
+  );
+}
+
+/** The exact context text the next question will carry, after masking. */
+function ContextPreview({ snap, onClose }: { snap: Snapshot; onClose: () => void }) {
+  const context = useMemo(() => buildContext(snap), [snap]);
+  const { total, found } = context.redactions;
+  return (
+    <div className="ai-context-view">
+      <div className="ai-context-note">
+        <p>
+          Este texto é enviado ao provider junto com cada pergunta (recalculado no envio, com o que estiver capturado naquele momento). Headers,
+          cookies, corpos de requisição e valores de query string não são incluídos.
+        </p>
+        <p>
+          {total ? (
+            <>
+              <b>{total} {total === 1 ? 'valor mascarado' : 'valores mascarados'}</b>: {describeRedactions(found)}.
+            </>
+          ) : (
+            'Nenhum valor sensível detectado no que será enviado.'
+          )}{' '}
+          A detecção é automática e pode não reconhecer todo dado sensível: revise antes de perguntar.
+        </p>
+        <button type="button" className="link-btn" onClick={onClose}>
+          Voltar para a conversa
+        </button>
+      </div>
+      <pre className="code-block ai-context-text">{context.text}</pre>
     </div>
   );
 }

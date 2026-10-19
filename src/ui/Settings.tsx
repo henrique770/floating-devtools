@@ -1,4 +1,5 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { DEFAULT_INSIGHTS_CONFIG, type InsightsConfig } from '../analysis/diagnostics/types';
 import { familyOf, FONTS, loadFont, type FontWeight } from './fonts';
 import { ProviderSettings } from './ProviderSettings';
 import { THEMES } from './themes';
@@ -36,7 +37,7 @@ const WEIGHTS: { value: FontWeight; label: string }[] = [
   { value: 700, label: 'Negrito' },
 ];
 
-export type SettingsSection = 'appearance' | 'assistant';
+export type SettingsSection = 'appearance' | 'insights' | 'assistant';
 
 interface Props {
   value: Appearance;
@@ -44,9 +45,11 @@ interface Props {
   onClose: () => void;
   section: SettingsSection;
   onSection: (s: SettingsSection) => void;
+  insights: InsightsConfig;
+  onInsights: (next: InsightsConfig) => void;
 }
 
-export function Settings({ value, onChange, onClose, section, onSection }: Props) {
+export function Settings({ value, onChange, onClose, section, onSection, insights, onInsights }: Props) {
   const ref = useRef<HTMLDivElement>(null);
   const set = (patch: Partial<Appearance>) => onChange({ ...value, ...patch });
 
@@ -71,11 +74,20 @@ export function Settings({ value, onChange, onClose, section, onSection }: Props
         <button type="button" role="tab" aria-checked={section === 'appearance'} onClick={() => onSection('appearance')}>
           Aparência
         </button>
+        <button type="button" role="tab" aria-checked={section === 'insights'} onClick={() => onSection('insights')}>
+          Insights
+        </button>
         <button type="button" role="tab" aria-checked={section === 'assistant'} onClick={() => onSection('assistant')}>
           Assistente
         </button>
       </div>
-      {section === 'assistant' ? <ProviderSettings /> : <AppearanceSettings value={value} set={set} />}
+      {section === 'assistant' ? (
+        <ProviderSettings />
+      ) : section === 'insights' ? (
+        <InsightsSettings value={insights} onChange={onInsights} />
+      ) : (
+        <AppearanceSettings value={value} set={set} />
+      )}
     </div>
   );
 }
@@ -229,5 +241,68 @@ function AppearanceSettings({ value, set }: { value: Appearance; set: (patch: Pa
         </div>
       ))}
     </>
+  );
+}
+
+const LIMITS: { key: keyof InsightsConfig; label: string; unit: string; min: number; max: number; step: number; scale?: number }[] = [
+  { key: 'slowMs', label: 'Requisição lenta acima de', unit: 'ms', min: 100, max: 60_000, step: 100 },
+  { key: 'largeBytes', label: 'Recurso pesado acima de', unit: 'kB', min: 10, max: 100_000, step: 10, scale: 1000 },
+  { key: 'duplicateMin', label: 'Duplicadas a partir de', unit: 'chamadas', min: 2, max: 50, step: 1 },
+  { key: 'duplicateWindowMs', label: 'Dentro de uma janela de', unit: 'ms', min: 100, max: 60_000, step: 100 },
+];
+
+/** Limits of the local diagnostics. Applied on blur/Enter, so typing doesn't re-run the rules on every key. */
+function InsightsSettings({ value, onChange }: { value: InsightsConfig; onChange: (next: InsightsConfig) => void }) {
+  return (
+    <>
+      <h3>Limites de alerta</h3>
+      <p className="settings-hint settings-note">
+        Usados pelos diagnósticos locais da aba Insights. Ao mudar um limite, os diagnósticos são recalculados com o que já foi capturado.
+      </p>
+      {LIMITS.map((l) => (
+        <LimitRow key={l.key} limit={l} value={value[l.key]} onCommit={(n) => onChange({ ...value, [l.key]: n })} />
+      ))}
+      <div className="settings-row">
+        <span className="settings-hint">A duração é o tempo total da requisição; o TTFB aparece separado nas evidências quando há dados de timing.</span>
+      </div>
+      <button type="button" className="link-btn" onClick={() => onChange(DEFAULT_INSIGHTS_CONFIG)}>
+        Restaurar padrões
+      </button>
+    </>
+  );
+}
+
+function LimitRow({ limit: l, value, onCommit }: { limit: (typeof LIMITS)[number]; value: number; onCommit: (n: number) => void }) {
+  const scale = l.scale ?? 1;
+  const [draft, setDraft] = useState(String(value / scale));
+  useEffect(() => setDraft(String(value / scale)), [value, scale]);
+  const commit = () => {
+    const n = Number(draft);
+    if (!Number.isFinite(n) || draft.trim() === '') return setDraft(String(value / scale));
+    const clamped = Math.min(l.max, Math.max(l.min, Math.round(n)));
+    setDraft(String(clamped));
+    if (clamped * scale !== value) onCommit(clamped * scale);
+  };
+  const id = `fdt-limit-${l.key}`;
+  return (
+    <div className="settings-row">
+      <label htmlFor={id}>{l.label}</label>
+      <span className="settings-number">
+        <input
+          id={id}
+          className="fdt-input"
+          type="number"
+          inputMode="numeric"
+          min={l.min}
+          max={l.max}
+          step={l.step}
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onBlur={commit}
+          onKeyDown={(e) => e.key === 'Enter' && commit()}
+        />
+        <span className="settings-hint">{l.unit}</span>
+      </span>
+    </div>
   );
 }

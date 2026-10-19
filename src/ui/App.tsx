@@ -1,8 +1,10 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type PointerEvent as ReactPointerEvent } from 'react';
+import { DEFAULT_INSIGHTS_CONFIG, type EventRef, type InsightsConfig } from '../analysis/diagnostics/types';
 import type { DevtoolsStore } from '../content/store';
 import { AssistantTab } from './AssistantTab';
 import { ConsoleTab } from './ConsoleTab';
 import { IconAssistant, IconClose, IconGear, IconMaximize, IconMinimize, Logo } from './Icons';
+import { InsightsTab, notableDiagnostics } from './InsightsTab';
 import { NetworkTab } from './NetworkTab';
 import { fontById, loadFont } from './fonts';
 import { isErrorEntry } from './format';
@@ -17,7 +19,8 @@ const SNAP = 36;
 const MIN_W = 320;
 const MIN_H = 220;
 
-type Tab = 'network' | 'console' | 'assistant';
+type Tab = 'network' | 'console' | 'insights' | 'assistant';
+type Focus = { id: string; nonce: number };
 type Size = { w: number; h: number };
 type Viewport = { w: number; h: number };
 
@@ -69,6 +72,11 @@ export function App({ store, onTogglePanelRequest }: Props) {
   const [storedAppearance, setAppearance] = usePersistentState<Partial<Appearance>>('appearance', DEFAULT_APPEARANCE);
   // Merge with defaults so settings saved by older versions gain the new fields.
   const appearance = useMemo(() => ({ ...DEFAULT_APPEARANCE, ...storedAppearance }), [storedAppearance]);
+  const [storedInsights, setInsights, insightsLoaded] = usePersistentState<Partial<InsightsConfig>>('insights', DEFAULT_INSIGHTS_CONFIG);
+  const insights = useMemo(() => ({ ...DEFAULT_INSIGHTS_CONFIG, ...storedInsights }), [storedInsights]);
+  useEffect(() => {
+    if (insightsLoaded) store.setInsightsConfig(insights);
+  }, [store, insights, insightsLoaded]);
 
   useEffect(() => {
     loadFont(fontById(appearance.font));
@@ -116,6 +124,8 @@ export function App({ store, onTogglePanelRequest }: Props) {
           onClose={onClose}
           appearance={appearance}
           onAppearance={setAppearance}
+          insights={insights}
+          onInsights={setInsights}
           panelPos={panelPos}
           onPanelPos={setPanelPos}
         />
@@ -268,11 +278,13 @@ interface PanelProps {
   onClose: () => void;
   appearance: Appearance;
   onAppearance: (a: Appearance) => void;
+  insights: InsightsConfig;
+  onInsights: (c: InsightsConfig) => void;
   panelPos: { x: number; y: number } | null;
   onPanelPos: (pos: { x: number; y: number } | null) => void;
 }
 
-const Panel = memo(function Panel({ hidden, store, snap, vp, button, size, onResize, maximized, onToggleMaximized, tab, onTab, onClose, appearance, onAppearance, panelPos, onPanelPos }: PanelProps) {
+const Panel = memo(function Panel({ hidden, store, snap, vp, button, size, onResize, maximized, onToggleMaximized, tab, onTab, onClose, appearance, onAppearance, insights, onInsights, panelPos, onPanelPos }: PanelProps) {
   const [liveSize, setLiveSize] = useState<Size | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsSection, setSettingsSection] = useState<SettingsSection>('appearance');
@@ -282,6 +294,27 @@ const Panel = memo(function Panel({ hidden, store, snap, vp, button, size, onRes
     setSettingsOpen(true);
   }, []);
   const resize = useRef<{ x: number; y: number; w: number; h: number; last: Size } | null>(null);
+
+  // Cross-tab navigation: Insights -> the original request/log, or -> the Assistant with a prepared question.
+  const [netFocus, setNetFocus] = useState<Focus>();
+  const [logFocus, setLogFocus] = useState<Focus>();
+  const [aiDraft, setAiDraft] = useState<{ text: string; nonce: number }>();
+  const navigate = useCallback(
+    (ref: EventRef) => {
+      const focus = { id: ref.id, nonce: Date.now() };
+      if (ref.kind === 'request') setNetFocus(focus);
+      else setLogFocus(focus);
+      onTab(ref.kind === 'request' ? 'network' : 'console');
+    },
+    [onTab],
+  );
+  const askAi = useCallback(
+    (text: string) => {
+      setAiDraft({ text, nonce: Date.now() });
+      onTab('assistant');
+    },
+    [onTab],
+  );
 
   const [livePos, setLivePos] = useState<{ left: number; top: number } | null>(null);
   const suppressClick = useRef(false);
@@ -357,6 +390,8 @@ const Panel = memo(function Panel({ hidden, store, snap, vp, button, size, onRes
 
   const requestCount = snap.requests.length;
   const requestErrors = useMemo(() => snap.requests.filter(isErrorEntry).length, [snap.requests]);
+  const notable = useMemo(() => notableDiagnostics(snap), [snap]);
+  const notableHigh = notable.some((d) => d.severity === 'high');
 
   return (
     <div
@@ -391,6 +426,14 @@ const Panel = memo(function Panel({ hidden, store, snap, vp, button, size, onRes
             Console
             {snap.errors > 0 && <span className="fdt-count is-error">{snap.errors}</span>}
             {snap.warnings > 0 && <span className="fdt-count is-warn">{snap.warnings}</span>}
+          </button>
+          <button type="button" role="tab" aria-selected={tab === 'insights'} className="fdt-tab" onClick={() => onTab('insights')}>
+            Insights
+            {notable.length > 0 && (
+              <span className={`fdt-count${notableHigh ? ' is-error' : ''}`} title="Diagnósticos ativos (exceto informativos)">
+                {notable.length}
+              </span>
+            )}
           </button>
           <button type="button" role="tab" aria-selected={tab === 'assistant'} className="fdt-tab" onClick={() => onTab('assistant')}>
             <IconAssistant size={16} className="fdt-tab-icon" />
@@ -427,16 +470,21 @@ const Panel = memo(function Panel({ hidden, store, snap, vp, button, size, onRes
             onClose={closeSettings}
             section={settingsSection}
             onSection={setSettingsSection}
+            insights={insights}
+            onInsights={onInsights}
           />
         )}
         <div className="fdt-tab-content" hidden={tab !== 'network'}>
-          <NetworkTab store={store} requests={snap.requests} recording={snap.recording} width={place.w} />
+          <NetworkTab store={store} requests={snap.requests} recording={snap.recording} width={place.w} focus={netFocus} />
         </div>
         <div className="fdt-tab-content" hidden={tab !== 'console'}>
-          <ConsoleTab store={store} logs={snap.logs} groups={snap.groups} active={!hidden && tab === 'console'} />
+          <ConsoleTab store={store} logs={snap.logs} groups={snap.groups} active={!hidden && tab === 'console'} focus={logFocus} />
+        </div>
+        <div className="fdt-tab-content" hidden={tab !== 'insights'}>
+          <InsightsTab store={store} snap={snap} slowMs={insights.slowMs} onNavigate={navigate} onAskAi={askAi} />
         </div>
         <div className="fdt-tab-content" hidden={tab !== 'assistant'}>
-          <AssistantTab store={store} snap={snap} active={!hidden && tab === 'assistant'} onOpenSettings={openProviderSettings} />
+          <AssistantTab store={store} snap={snap} active={!hidden && tab === 'assistant'} onOpenSettings={openProviderSettings} draft={aiDraft} />
         </div>
       </div>
       {!maximized && (

@@ -44,11 +44,36 @@ Abra `chrome://extensions` (ou `brave://extensions`), ative o **Modo do desenvol
   3 primeiros frames do stack (sem query string nem hash de bundle). O local do erro faz parte da chave: a mesma
   mensagem lançada de lugares diferentes fica em grupos separados. Com filtro de período, aparecem os grupos com
   atividade no período, mas o contador mostra o total desde a última limpeza.
+- **Insights**: diagnósticos automáticos gerados localmente (sem IA) a partir do que foi capturado — painel com
+  totais (requisições, erros, avisos, diagnósticos, lentas) e distribuição por severidade, e a lista de problemas com
+  evidências, possíveis causas, impacto, recomendações e eventos relacionados (clique para abrir a requisição ou o log
+  original). Filtros por categoria, severidade e texto; ordenação por relevância ou horário; **Dispensar** esconde um
+  diagnóstico mesmo que ele volte a ocorrer; **Investigar com IA** abre o Assistant com a pergunta preenchida para você
+  revisar antes de enviar. Os limites (requisição lenta, recurso pesado, duplicadas) ficam em **⚙ → Insights**.
+  Regras iniciais:
+  - **JavaScript**: exceções não tratadas (TypeError, ReferenceError, SyntaxError…), Promises rejeitadas sem tratamento,
+    `Error` registrado com `console.error` e scripts que não carregaram. Um `console.error("texto")` simples não vira
+    diagnóstico.
+  - **Network**: HTTP 4xx/5xx, timeout, cancelamento, bloqueio pelo navegador (adblock), falha de conexão, **possível
+    CORS** (chamada para outra origem em que o `webRequest` viu o servidor responder mas a página só recebeu
+    "Failed to fetch" — o navegador não informa o motivo à página, então é sempre apresentado como hipótese),
+    HTML recebido em chamada de API e JSON inválido.
+  - **Storage**: `QuotaExceededError`, acesso negado ao armazenamento e falhas do IndexedDB.
+  - **Performance**: requisições lentas (duração total; TTFB e download aparecem separados quando há dados de timing),
+    recursos pesados e chamadas idênticas repetidas na mesma janela ("potencialmente duplicadas" — polling e novas
+    tentativas também repetem chamadas).
+  Problemas vindos de scripts/hosts de outra origem têm a severidade reduzida um nível. Ocorrências do mesmo problema
+  (mesma regra e mesmo endpoint/grupo de log) são somadas em um diagnóstico.
 - **Assistant**: chat com IA que recebe como contexto um resumo do que foi capturado (erros e avisos do
   console, requisições com falha e lentas, totais) — pergunte "Resuma os logs", "Recomende melhorias" etc.
   Funciona com a sua própria API key (BYOK): **⚙ → Assistente**, cole a chave da DeepSeek e escolha o modelo.
-  A chave fica em `chrome.storage.local` e só o service worker a usa; headers, cookies e valores de query
-  string não são enviados. Novos providers compatíveis com a API da OpenAI entram em `src/shared/ai.ts`.
+  A chave fica em `chrome.storage.local` e só o service worker a usa. Headers, cookies, corpos de requisição e
+  valores de query string não são enviados; no que é enviado (mensagens, stacks, trechos de respostas com erro, título),
+  tokens, JWTs, chaves de API conhecidas, senhas e campos sensíveis (`password`, `*_token`, `api_key`…), credenciais
+  em URL, e-mails, CPFs e números de cartão são mascarados como `[REDACTED:tipo]` antes de sair do navegador
+  (`src/analysis/redact.ts`). Clique em **Contexto** na barra do Assistant para ver o texto exato que será enviado e
+  quantos valores foram mascarados. Os dados capturados vão em um bloco delimitado na mensagem do usuário, nunca nas
+  instruções de sistema, e o modelo é instruído a tratá-los como dados não confiáveis (eles vêm da página). Novos providers compatíveis com a API da OpenAI entram em `src/shared/ai.ts`.
   As respostas usam a fonte e o tema escolhidos (inclusive nas cores do código), cada bloco de código tem
   botão de copiar, e as conversas ficam salvas no histórico (🕘, até 50, com busca) para retomar depois.
 
@@ -59,8 +84,12 @@ Abra `chrome://extensions` (ou `brave://extensions`), ative o **Modo do desenvol
 | Hook na página (MAIN world, `document_start`) | `src/injected/main-world.ts` | intercepta `console.*`, erros, `fetch`, `XHR` e usa `PerformanceObserver` para os demais recursos |
 | Service worker | `src/background.ts` | `chrome.webRequest` completa status, headers, IP e cache de recursos estáticos; ícone e atalho; chamadas ao provider de IA (streaming) |
 | Content script | `src/content/` | store com atualização em lote e UI em React dentro de Shadow DOM (o CSS do site não interfere) |
-| Análise | `src/analysis/` | lógica pura e testável (sem `chrome.*`): fingerprint e agrupamento incremental de logs |
+| Análise | `src/analysis/` | lógica pura e testável (sem `chrome.*`): fingerprint e agrupamento incremental de logs, e o motor de diagnósticos (`diagnostics/`), avaliado evento a evento |
 | UI | `src/ui/` | botão, painel, abas |
+
+Para criar uma regra de diagnóstico: implemente um `LogRule` ou `RequestRule` em `src/analysis/diagnostics/rules/`
+(retorne `null` quando não se aplica; coloque só fatos em `evidence` e as hipóteses em `causes`), registre-a em
+`rules/index.ts` e adicione casos positivos e negativos em `rules.test.ts`.
 
 ## Limitações (em relação ao DevTools nativo)
 

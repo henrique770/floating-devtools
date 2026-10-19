@@ -1,4 +1,4 @@
-import { Fragment, memo, useMemo, useState } from 'react';
+import { Fragment, memo, useEffect, useMemo, useRef, useState } from 'react';
 import type { DevtoolsStore } from '../content/store';
 import type { NetworkEntry } from '../shared/types';
 import {
@@ -43,14 +43,27 @@ interface Props {
   requests: NetworkEntry[];
   recording: boolean;
   width: number;
+  /** Request to reveal (navigation from Insights); the nonce makes repeated clicks re-trigger. */
+  focus?: { id: string; nonce: number };
 }
 
-export function NetworkTab({ store, requests, recording, width }: Props) {
+export function NetworkTab({ store, requests, recording, width, focus }: Props) {
   const [query, setQuery] = useState('');
   const [typeFilter, setTypeFilter] = useState('all');
   const [errorsOnly, setErrorsOnly] = useState(false);
   const [sort, setSort] = useState<{ key: SortKey; dir: 1 | -1 }>({ key: 'start', dir: 1 });
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const rowsRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!focus) return;
+    // Clear the filters so the request is guaranteed to be in the list, then select it.
+    setQuery('');
+    setTypeFilter('all');
+    setErrorsOnly(false);
+    setSelectedId(focus.id);
+    requestAnimationFrame(() => rowsRef.current?.querySelector(`[data-id="${CSS.escape(focus.id)}"]`)?.scrollIntoView({ block: 'nearest' }));
+  }, [focus]);
 
   const visible = useMemo(() => {
     const filter = TYPE_FILTERS.find((f) => f.key === typeFilter) ?? TYPE_FILTERS[0];
@@ -144,7 +157,7 @@ export function NetworkTab({ store, requests, recording, width }: Props) {
                 </button>
               ))}
             </div>
-            <div className="net-rows">
+            <div className="net-rows" ref={rowsRef}>
               {visible.map((r) => (
                 <Row key={r.id} entry={r} compact={!!selected} selected={r.id === selectedId} onSelect={setSelectedId} />
               ))}
@@ -186,6 +199,7 @@ const Row = memo(function Row({
   return (
     <div
       role="row"
+      data-id={r.id}
       className={`net-row${selected ? ' is-selected' : ''}${error ? ' is-error' : ''}${r.state === 'pending' ? ' is-pending' : ''}`}
       onClick={() => onSelect(r.id)}
       title={r.url}
