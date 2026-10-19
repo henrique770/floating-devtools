@@ -372,6 +372,39 @@
   color: var(--red);
 }
 
+.chips-end {
+  display: flex;
+  gap: 4px;
+  margin-left: auto;
+  padding-left: 8px;
+}
+
+.fdt-select {
+  height: calc(var(--fs) * 1.8333);
+  padding: 0 4px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg-input);
+  color: var(--text-dim);
+  font: inherit;
+  outline: none;
+  cursor: pointer;
+}
+
+.fdt-select:hover {
+  color: var(--text);
+}
+
+.fdt-select:focus-visible {
+  border-color: var(--accent);
+}
+
+.fdt-select.is-set {
+  color: var(--text);
+  border-color: var(--border-strong);
+  background: var(--bg-active);
+}
+
 .empty,
 .muted {
   color: var(--text-faint);
@@ -824,6 +857,34 @@
   font-size: calc(var(--fs) * 0.8333);
   line-height: calc(var(--fs) * 1.3333);
   text-align: center;
+}
+
+.msg-count.is-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  cursor: pointer;
+}
+
+.msg-count.is-toggle:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.msg-group-members {
+  border-bottom: 1px solid var(--row-border);
+  padding-left: 18px;
+}
+
+.msg-group-members .msg:last-child {
+  border-bottom: none;
+}
+
+.msg-group-meta {
+  padding: 3px 10px 3px 6px;
+  color: var(--text-faint);
+  font-size: calc(var(--fs) * 0.9167);
+  border-bottom: 1px solid var(--row-border);
 }
 
 .msg-source {

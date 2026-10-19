@@ -87,6 +87,8 @@ export interface ConsoleEntry {
   source?: { label: string; url: string };
   stack?: string;
   count?: number;
+  /** Fingerprint of the entry's group (set by the store, see analysis/fingerprint). */
+  group?: string;
 }
 
 /** Page (MAIN world) -> UI */

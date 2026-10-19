@@ -1,8 +1,11 @@
-import { memo, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import type { LogGroup } from '../analysis/groups';
+import { originOf } from '../analysis/origin';
 import type { DevtoolsStore } from '../content/store';
 import type { ConsoleEntry, ConsoleLevel, SerializedValue } from '../shared/types';
 import { formatClock } from './format';
 import { IconChevron, IconClear } from './Icons';
+import { usePersistentState } from './usePersistentState';
 import { preview, ValueView } from './ValueView';
 
 const LEVELS: { key: string; label: string; match: (l: ConsoleLevel) => boolean }[] = [
@@ -14,41 +17,122 @@ const LEVELS: { key: string; label: string; match: (l: ConsoleLevel) => boolean 
   { key: 'debug', label: 'Verbose', match: (l) => l === 'debug' },
 ];
 
+const ORIGINS = [
+  { key: 'all', label: 'Todas as origens' },
+  { key: 'page', label: 'Esta origem' },
+  { key: 'third-party', label: 'Terceiros' },
+];
+
+const PERIODS = [
+  { key: 'all', label: 'Todo o período', ms: 0 },
+  { key: '1m', label: 'Último minuto', ms: 60_000 },
+  { key: '5m', label: 'Últimos 5 min', ms: 5 * 60_000 },
+  { key: '15m', label: 'Últimos 15 min', ms: 15 * 60_000 },
+];
+
+/** Occurrences listed when a group is expanded (the most recent ones). */
+const MAX_MEMBERS = 200;
+
+/** Current time, refreshed periodically while `enabled` (keeps relative period filters moving). */
+function useNow(enabled: boolean, everyMs = 5000) {
+  const [now, setNow] = useState(Date.now);
+  useEffect(() => {
+    if (!enabled) return;
+    setNow(Date.now());
+    const id = setInterval(() => setNow(Date.now()), everyMs);
+    return () => clearInterval(id);
+  }, [enabled, everyMs]);
+  return now;
+}
+
 interface Props {
   store: DevtoolsStore;
   logs: ConsoleEntry[];
+  groups: LogGroup[];
   active: boolean;
 }
 
-export function ConsoleTab({ store, logs, active }: Props) {
+export function ConsoleTab({ store, logs, groups, active }: Props) {
   const [query, setQuery] = useState('');
   const [level, setLevel] = useState('all');
+  const [origin, setOrigin] = useState('all');
+  const [period, setPeriod] = useState('all');
   const [showTime, setShowTime] = useState(false);
+  const [grouped, setGrouped] = usePersistentState('console.grouped', false);
+  const [openGroups, setOpenGroups] = useState<ReadonlySet<string>>(() => new Set());
   const listRef = useRef<HTMLDivElement>(null);
   const stickToBottom = useRef(true);
 
-  const visible = useMemo(() => {
-    const match = (LEVELS.find((l) => l.key === level) ?? LEVELS[0]).match;
+  const periodMs = (PERIODS.find((p) => p.key === period) ?? PERIODS[0]).ms;
+  const now = useNow(active && periodMs > 0);
+
+  const matches = useMemo(() => {
+    const levelMatch = (LEVELS.find((l) => l.key === level) ?? LEVELS[0]).match;
     const q = query.trim().toLowerCase();
-    return logs.filter(
-      (e) =>
-        match(e.level) &&
-        (!q || e.args.some((a) => preview(a).toLowerCase().includes(q)) || e.source?.label.toLowerCase().includes(q)),
-    );
-  }, [logs, level, query]);
+    const pageOrigin = location.origin;
+    return (e: ConsoleEntry) =>
+      levelMatch(e.level) &&
+      (origin === 'all' || originOf(e, pageOrigin) === origin) &&
+      (!q || e.args.some((a) => preview(a).toLowerCase().includes(q)) || !!e.source?.label.toLowerCase().includes(q));
+  }, [level, origin, query]);
+
+  const since = periodMs ? now - periodMs : 0;
+
+  const visible = useMemo(() => (grouped ? [] : logs.filter((e) => e.time >= since && matches(e))), [grouped, logs, matches, since]);
+  // A group is shown when it had activity in the period; its count is always the total since the last clear.
+  const visibleGroups = useMemo(
+    () => (grouped ? groups.filter((g) => g.lastTime >= since && matches(g.sample)) : []),
+    [grouped, groups, matches, since],
+  );
+
+  // Occurrences of the expanded groups only, so closed rows keep their memoized props.
+  const members = useMemo(() => {
+    const map = new Map<string, ConsoleEntry[]>();
+    if (!grouped || !openGroups.size) return map;
+    for (const e of logs) {
+      if (!e.group || !openGroups.has(e.group)) continue;
+      const list = map.get(e.group);
+      if (list) list.push(e);
+      else map.set(e.group, [e]);
+    }
+    return map;
+  }, [grouped, logs, openGroups]);
+
+  const toggleGroup = useCallback(
+    (key: string) =>
+      setOpenGroups((prev) => {
+        const next = new Set(prev);
+        if (!next.delete(key)) next.add(key);
+        return next;
+      }),
+    [],
+  );
 
   useLayoutEffect(() => {
     const el = listRef.current;
     if (el && active && stickToBottom.current) el.scrollTop = el.scrollHeight;
-  }, [visible, active]);
+  }, [visible, visibleGroups, active]);
+
+  const shown = grouped ? visibleGroups.length : visible.length;
 
   return (
     <div className="con">
       <div className="toolbar">
-        <button type="button" className="fdt-icon-btn" onClick={() => store.clearConsole()} title="Limpar console">
+        <button
+          type="button"
+          className="fdt-icon-btn"
+          onClick={() => {
+            store.clearConsole();
+            setOpenGroups(new Set());
+          }}
+          title="Limpar console"
+        >
           <IconClear />
         </button>
         <input className="fdt-input" placeholder="Filtrar" value={query} onChange={(e) => setQuery(e.target.value)} spellCheck={false} />
+        <label className="check" title="Agrupar mensagens equivalentes (mesma mensagem, origem e stack trace)">
+          <input type="checkbox" checked={grouped} onChange={(e) => setGrouped(e.target.checked)} /> Agrupar
+        </label>
         <label className="check" title="Mostrar horário">
           <input type="checkbox" checked={showTime} onChange={(e) => setShowTime(e.target.checked)} /> Hora
         </label>
@@ -59,6 +143,22 @@ export function ConsoleTab({ store, logs, active }: Props) {
             {l.label}
           </button>
         ))}
+        <span className="chips-end">
+          <select className={`fdt-select${origin !== 'all' ? ' is-set' : ''}`} value={origin} onChange={(e) => setOrigin(e.target.value)} aria-label="Origem">
+            {ORIGINS.map((o) => (
+              <option key={o.key} value={o.key}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+          <select className={`fdt-select${period !== 'all' ? ' is-set' : ''}`} value={period} onChange={(e) => setPeriod(e.target.value)} aria-label="Período">
+            {PERIODS.map((p) => (
+              <option key={p.key} value={p.key}>
+                {p.label}
+              </option>
+            ))}
+          </select>
+        </span>
       </div>
       <div
         className="con-list"
@@ -68,10 +168,16 @@ export function ConsoleTab({ store, logs, active }: Props) {
           stickToBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 24;
         }}
       >
-        {visible.map((e) => (
-          <Message key={e.id} entry={e} showTime={showTime} />
-        ))}
-        {!visible.length && <div className="empty">{logs.length ? 'Nenhuma mensagem corresponde ao filtro.' : 'Nenhuma mensagem ainda.'}</div>}
+        {grouped
+          ? visibleGroups.map((g) =>
+              g.count > 1 ? (
+                <GroupRow key={g.key} group={g} showTime={showTime} open={openGroups.has(g.key)} members={members.get(g.key)} onToggle={toggleGroup} />
+              ) : (
+                <Message key={g.key} entry={g.sample} showTime={showTime} />
+              ),
+            )
+          : visible.map((e) => <Message key={e.id} entry={e} showTime={showTime} />)}
+        {!shown && <div className="empty">{logs.length ? 'Nenhuma mensagem corresponde ao filtro.' : 'Nenhuma mensagem ainda.'}</div>}
       </div>
       <Prompt onRun={(code) => {
         stickToBottom.current = true;
@@ -81,13 +187,67 @@ export function ConsoleTab({ store, logs, active }: Props) {
   );
 }
 
-const Message = memo(function Message({ entry: e, showTime }: { entry: ConsoleEntry; showTime: boolean }) {
+interface GroupRowProps {
+  group: LogGroup;
+  showTime: boolean;
+  open: boolean;
+  /** Occurrences still in the log buffer; only provided while open. */
+  members?: ConsoleEntry[];
+  onToggle: (key: string) => void;
+}
+
+const GroupRow = memo(function GroupRow({ group: g, showTime, open, members = [], onToggle }: GroupRowProps) {
+  const entry = useMemo(() => ({ ...g.sample, count: g.count }), [g]);
+  const span = `primeira ${formatClock(g.firstTime)} · última ${formatClock(g.lastTime)}`;
+  const recent = members.slice(-MAX_MEMBERS);
+  const retained = members.reduce((n, e) => n + (e.count ?? 1), 0);
+  return (
+    <div className={`msg-group${open ? ' is-open' : ''}`}>
+      <Message entry={entry} showTime={showTime} group={{ open, span, onToggle: () => onToggle(g.key) }} />
+      {open && (
+        <div className="msg-group-members">
+          <div className="msg-group-meta">
+            {g.count} ocorrências · {span}
+            {retained < g.count && ` · ${g.count - retained} mais antigas já saíram do buffer`}
+            {recent.length < members.length && ` · exibindo as ${recent.length} entradas mais recentes`}
+          </div>
+          {recent.map((e) => (
+            <Message key={e.id} entry={e} showTime />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+});
+
+interface MessageProps {
+  entry: ConsoleEntry;
+  showTime: boolean;
+  /** Set when the row heads a group: the count becomes the expand toggle. */
+  group?: { open: boolean; span: string; onToggle: () => void };
+}
+
+const Message = memo(function Message({ entry: e, showTime, group }: MessageProps) {
   const [stackOpen, setStackOpen] = useState(false);
   const icon = e.level === 'error' ? '✕' : e.level === 'warn' ? '⚠' : e.level === 'command' ? '›' : e.level === 'result' ? '‹' : '';
+  const count = e.count && e.count > 1 ? e.count : 0;
   return (
     <div className={`msg lvl-${e.level}`}>
       <span className="msg-icon">{icon}</span>
-      {e.count && e.count > 1 ? <span className="msg-count">{e.count}</span> : null}
+      {group ? (
+        <button
+          type="button"
+          className="msg-count is-toggle"
+          aria-expanded={group.open}
+          onClick={group.onToggle}
+          title={`${e.count} ocorrências (${group.span}) — ${group.open ? 'recolher' : 'expandir'}`}
+        >
+          <IconChevron open={group.open} width={8} height={8} />
+          {e.count}
+        </button>
+      ) : count ? (
+        <span className="msg-count">{count}</span>
+      ) : null}
       <div className="msg-content">
         {showTime && <span className="msg-time">{formatClock(e.time)}</span>}
         {e.stack && (

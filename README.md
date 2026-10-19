@@ -9,6 +9,8 @@ botão flutuante e arrastável, no estilo do indicador do Next.js. O painel abre
 npm install
 npm run build        # gera dist/
 npm run dev          # rebuild automático ao salvar
+npm test             # testes (Vitest)
+npm run typecheck
 ```
 
 Abra `chrome://extensions` (ou `brave://extensions`), ative o **Modo do desenvolvedor**, clique em
@@ -33,8 +35,15 @@ Abra `chrome://extensions` (ou `brave://extensions`), ative o **Modo do desenvol
   IBM Plex Mono. Para adicionar outra: `npm i -D @fontsource/<nome>` e uma entrada em `src/ui/fonts.ts`.
 - **Network**: filtro por texto (`-texto` inverte) e por tipo, ordenação por coluna, detalhes com
   Headers / Payload / Preview / Response / Timing e "Copiar como cURL".
-- **Console**: níveis, filtro, objetos expansíveis, mensagens repetidas agrupadas, erros não tratados,
-  e um prompt para executar JS na página (↑/↓ para o histórico).
+- **Console**: níveis, filtro por texto, origem (esta origem / terceiros) e período, objetos expansíveis,
+  mensagens repetidas agrupadas, erros não tratados, e um prompt para executar JS na página (↑/↓ para o histórico).
+  **Agrupar** junta mensagens equivalentes mesmo que não sejam consecutivas — `QuotaExceededError` 200× vira
+  uma linha com o total, primeira e última ocorrência; clique no contador para ver as ocorrências originais.
+  Duas mensagens são equivalentes quando têm o mesmo nível, prefixo, mensagem normalizada (ids, UUIDs, hashes,
+  números com 4+ dígitos e decimais viram placeholders; números curtos como status HTTP são mantidos), origem e os
+  3 primeiros frames do stack (sem query string nem hash de bundle). O local do erro faz parte da chave: a mesma
+  mensagem lançada de lugares diferentes fica em grupos separados. Com filtro de período, aparecem os grupos com
+  atividade no período, mas o contador mostra o total desde a última limpeza.
 - **Assistant**: chat com IA que recebe como contexto um resumo do que foi capturado (erros e avisos do
   console, requisições com falha e lentas, totais) — pergunte "Resuma os logs", "Recomende melhorias" etc.
   Funciona com a sua própria API key (BYOK): **⚙ → Assistente**, cole a chave da DeepSeek e escolha o modelo.
@@ -50,6 +59,7 @@ Abra `chrome://extensions` (ou `brave://extensions`), ative o **Modo do desenvol
 | Hook na página (MAIN world, `document_start`) | `src/injected/main-world.ts` | intercepta `console.*`, erros, `fetch`, `XHR` e usa `PerformanceObserver` para os demais recursos |
 | Service worker | `src/background.ts` | `chrome.webRequest` completa status, headers, IP e cache de recursos estáticos; ícone e atalho; chamadas ao provider de IA (streaming) |
 | Content script | `src/content/` | store com atualização em lote e UI em React dentro de Shadow DOM (o CSS do site não interfere) |
+| Análise | `src/analysis/` | lógica pura e testável (sem `chrome.*`): fingerprint e agrupamento incremental de logs |
 | UI | `src/ui/` | botão, painel, abas |
 
 ## Limitações (em relação ao DevTools nativo)

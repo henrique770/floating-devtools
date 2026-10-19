@@ -1,3 +1,4 @@
+import { LogGroupIndex, type LogGroup } from '../analysis/groups';
 import { fromWebRequestType } from '../shared/resource-type';
 import type { ConsoleEntry, NetworkEntry, NetworkPatch, PageMessage, WebRequestInfo } from '../shared/types';
 
@@ -8,6 +9,8 @@ const FLUSH_MS = 60;
 export interface Snapshot {
   requests: NetworkEntry[];
   logs: ConsoleEntry[];
+  /** Console entries grouped by fingerprint, in last-activity order. */
+  groups: LogGroup[];
   errors: number;
   warnings: number;
   recording: boolean;
@@ -22,11 +25,12 @@ export class DevtoolsStore {
   private order: string[] = [];
   private logs: ConsoleEntry[] = [];
   private lastLogKey = '';
+  private groups = new LogGroupIndex();
   private recording = true;
   private listeners = new Set<() => void>();
   private timer: ReturnType<typeof setTimeout> | undefined;
   private unmatchedWeb = new Map<string, WebRequestInfo[]>();
-  private snapshot: Snapshot = { requests: [], logs: [], errors: 0, warnings: 0, recording: true };
+  private snapshot: Snapshot = { requests: [], logs: [], groups: [], errors: 0, warnings: 0, recording: true };
 
   constructor(private evalInPage: (code: string) => void) {}
 
@@ -152,8 +156,11 @@ export class DevtoolsStore {
     const key = JSON.stringify([entry.level, entry.prefix, entry.args, entry.source?.url]);
     const last = this.logs[this.logs.length - 1];
     if (last && key === this.lastLogKey && entry.level !== 'command' && entry.level !== 'result') {
-      this.logs[this.logs.length - 1] = { ...last, count: (last.count ?? 1) + 1, time: entry.time };
+      const merged = { ...last, count: (last.count ?? 1) + 1, time: entry.time };
+      this.logs[this.logs.length - 1] = merged;
+      this.groups.add(merged);
     } else {
+      entry.group = this.groups.add(entry);
       this.logs.push(entry);
       if (this.logs.length > MAX_LOGS) this.logs.shift();
     }
@@ -164,6 +171,7 @@ export class DevtoolsStore {
   clearConsole() {
     this.logs = [];
     this.lastLogKey = '';
+    this.groups.clear();
     this.schedule();
   }
 
@@ -192,6 +200,7 @@ export class DevtoolsStore {
     this.snapshot = {
       requests: this.order.map((id) => this.entries.get(id)!),
       logs: this.logs.slice(),
+      groups: this.groups.list(),
       errors,
       warnings,
       recording: this.recording,

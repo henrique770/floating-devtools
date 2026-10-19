@@ -433,7 +433,7 @@ const Panel = memo(function Panel({ hidden, store, snap, vp, button, size, onRes
           <NetworkTab store={store} requests={snap.requests} recording={snap.recording} width={place.w} />
         </div>
         <div className="fdt-tab-content" hidden={tab !== 'console'}>
-          <ConsoleTab store={store} logs={snap.logs} active={!hidden && tab === 'console'} />
+          <ConsoleTab store={store} logs={snap.logs} groups={snap.groups} active={!hidden && tab === 'console'} />
         </div>
         <div className="fdt-tab-content" hidden={tab !== 'assistant'}>
           <AssistantTab store={store} snap={snap} active={!hidden && tab === 'assistant'} onOpenSettings={openProviderSettings} />
