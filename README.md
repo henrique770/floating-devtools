@@ -24,8 +24,9 @@ Abra `chrome://extensions` (ou `brave://extensions`), ative o **Modo do desenvol
 - O ícone da extensão na barra mostra/oculta o botão em todos os sites.
 - Para redimensionar o painel, use o canto marcado; ou ⤢ para maximizar.
 - **⚙ Aparência**: modo translúcido (vidro com blur e opacidade ajustável) e temas — Default, Dracula,
-  Tokyo Night, Catppuccin, Gruvbox, Nord, Cyberpunk 2077, Evangelion e SynthWave '84. Para criar um tema,
-  adicione uma paleta em `src/ui/themes.ts`.
+  Tokyo Night, Catppuccin, Gruvbox, Nord, Cyberpunk 2077, Evangelion e SynthWave '84; e claros: Atom One Light,
+  Ayu Light, White & Black, GitHub Light, Solarized Light, Gruvbox Light, Rosé Pine Dawn e Catppuccin Latte. Para criar um tema,
+  adicione uma paleta em `src/ui/themes.ts` (`light: true` para temas claros).
 - **⚙ Fonte**: tamanho (10–18px), peso (regular/médio/negrito), erros e avisos em negrito, e 11 fontes
   monoespaçadas empacotadas na extensão (funcionam offline e em sites com CSP) — entre elas Atkinson
   Hyperlegible Mono e Intel One Mono, feitas para legibilidade e contraste, JetBrains Mono, Fira Code e

@@ -1,4 +1,4 @@
-import { memo, useMemo, useState } from 'react';
+import { Fragment, memo, useMemo, useState } from 'react';
 import type { DevtoolsStore } from '../content/store';
 import type { NetworkEntry } from '../shared/types';
 import {
@@ -48,6 +48,7 @@ interface Props {
 export function NetworkTab({ store, requests, recording, width }: Props) {
   const [query, setQuery] = useState('');
   const [typeFilter, setTypeFilter] = useState('all');
+  const [errorsOnly, setErrorsOnly] = useState(false);
   const [sort, setSort] = useState<{ key: SortKey; dir: 1 | -1 }>({ key: 'start', dir: 1 });
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
@@ -58,13 +59,14 @@ export function NetworkTab({ store, requests, recording, width }: Props) {
     const needle = negate ? q.slice(1) : q;
     const list = requests.filter((r) => {
       if (!filter.match(r.type)) return false;
+      if (errorsOnly && !isErrorEntry(r)) return false;
       if (!needle) return true;
       const hit = r.url.toLowerCase().includes(needle) || r.method.toLowerCase() === needle || String(r.status) === needle;
       return negate ? !hit : hit;
     });
     if (sort.key !== 'start' || sort.dir !== 1) list.sort((a, b) => sorters[sort.key](a, b) * sort.dir);
     return list;
-  }, [requests, query, typeFilter, sort]);
+  }, [requests, query, typeFilter, errorsOnly, sort]);
 
   const selected = selectedId ? requests.find((r) => r.id === selectedId) : undefined;
   const narrow = width < 600;
@@ -110,16 +112,24 @@ export function NetworkTab({ store, requests, recording, width }: Props) {
       </div>
       <div className="chips" role="radiogroup" aria-label="Tipo">
         {TYPE_FILTERS.map((f) => (
-          <button
-            key={f.key}
-            type="button"
-            role="radio"
-            aria-checked={typeFilter === f.key}
-            className="chip"
-            onClick={() => setTypeFilter(f.key)}
-          >
-            {f.label}
-          </button>
+          <Fragment key={f.key}>
+            <button type="button" role="radio" aria-checked={typeFilter === f.key} className="chip" onClick={() => setTypeFilter(f.key)}>
+              {f.label}
+            </button>
+            {f.key === 'all' && (
+              // Independent of the type chips, so it combines with them (e.g. Errors + Img).
+              <button
+                type="button"
+                role="switch"
+                aria-checked={errorsOnly}
+                className="chip chip-errors"
+                onClick={() => setErrorsOnly(!errorsOnly)}
+                title="Só requisições com falha ou status >= 400"
+              >
+                Errors
+              </button>
+            )}
+          </Fragment>
         ))}
       </div>
 

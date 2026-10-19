@@ -25,6 +25,8 @@ export interface ThemePalette {
   fab?: string;
   /** Corner radius of the panel, in px. */
   radius?: number;
+  /** Light background: softer shadows, light scrollbars and native controls. */
+  light?: boolean;
 }
 
 export interface Theme {
@@ -137,6 +139,105 @@ export const THEMES: Theme[] = [
       string: '#ff8b39', number: '#f97e72', key: '#36f9f6', nil: '#848bbd', fn: '#fede5d', node: '#ff7edb',
     },
   },
+
+  // ------------------------------------------------------------ light
+  // In the syntax colors, `node` is used for keywords and `key` for properties (see .hl-* in styles.css).
+  {
+    id: 'one-light',
+    name: 'Atom One Light',
+    palette: {
+      bg: '#fafafa', bgElev: '#f0f0f1', bgHover: '#eaeaeb', bgActive: '#dfe0e2',
+      border: '#e5e5e6', borderStrong: '#d0d1d6',
+      text: '#383a42', textDim: '#5c5f69', textFaint: '#a0a1a7',
+      accent: '#4078f2', red: '#e45649', yellow: '#c18401', green: '#50a14f',
+      string: '#50a14f', number: '#986801', key: '#e45649', nil: '#a0a1a7', fn: '#4078f2', node: '#a626a4',
+      light: true,
+    },
+  },
+  {
+    id: 'ayu-light',
+    name: 'Ayu Light',
+    palette: {
+      bg: '#fcfcfc', bgElev: '#f3f4f5', bgHover: '#eff0f1', bgActive: '#e4e6e8',
+      border: '#e7e8e9', borderStrong: '#d6d8db',
+      text: '#5c6166', textDim: '#787b80', textFaint: '#a0a6ad',
+      accent: '#ff9940', red: '#e65050', yellow: '#e59d00', green: '#86b300',
+      string: '#86b300', number: '#a37acc', key: '#399ee6', nil: '#adb1b8', fn: '#eba400', node: '#fa8d3e',
+      light: true,
+    },
+  },
+  {
+    id: 'white-black',
+    name: 'White & Black',
+    palette: {
+      bg: '#ffffff', bgElev: '#f5f5f5', bgHover: '#efefef', bgActive: '#e2e2e2',
+      border: '#e4e4e4', borderStrong: '#111111',
+      text: '#000000', textDim: '#333333', textFaint: '#767676',
+      accent: '#000000', red: '#c40000', yellow: '#8a6100', green: '#1a7f37',
+      string: '#444444', number: '#000000', key: '#000000', nil: '#808080', fn: '#000000', node: '#000000',
+      fab: '#000000', radius: 4, light: true,
+    },
+  },
+  {
+    id: 'github-light',
+    name: 'GitHub Light',
+    palette: {
+      bg: '#ffffff', bgElev: '#f6f8fa', bgHover: '#f3f4f6', bgActive: '#e7ebef',
+      border: '#d8dee4', borderStrong: '#c1c8cf',
+      text: '#1f2328', textDim: '#59636e', textFaint: '#818b98',
+      accent: '#0969da', red: '#cf222e', yellow: '#9a6700', green: '#1a7f37',
+      string: '#0a3069', number: '#0550ae', key: '#953800', nil: '#6e7781', fn: '#8250df', node: '#cf222e',
+      light: true,
+    },
+  },
+  {
+    id: 'solarized-light',
+    name: 'Solarized Light',
+    palette: {
+      bg: '#fdf6e3', bgElev: '#eee8d5', bgHover: '#f3ecd7', bgActive: '#e6dfc6',
+      border: '#e8e1cb', borderStrong: '#d3cbb2',
+      text: '#586e75', textDim: '#657b83', textFaint: '#93a1a1',
+      accent: '#268bd2', red: '#dc322f', yellow: '#b58900', green: '#859900',
+      string: '#2aa198', number: '#d33682', key: '#268bd2', nil: '#93a1a1', fn: '#b58900', node: '#859900',
+      light: true,
+    },
+  },
+  {
+    id: 'gruvbox-light',
+    name: 'Gruvbox Light',
+    palette: {
+      bg: '#fbf1c7', bgElev: '#f2e5bc', bgHover: '#f2e5bc', bgActive: '#e6d6a8',
+      border: '#ebdbb2', borderStrong: '#d5c4a1',
+      text: '#3c3836', textDim: '#504945', textFaint: '#928374',
+      accent: '#076678', red: '#9d0006', yellow: '#b57614', green: '#79740e',
+      string: '#79740e', number: '#8f3f71', key: '#076678', nil: '#928374', fn: '#427b58', node: '#9d0006',
+      radius: 6, light: true,
+    },
+  },
+  {
+    id: 'rose-pine-dawn',
+    name: 'Rosé Pine Dawn',
+    palette: {
+      bg: '#faf4ed', bgElev: '#fffaf3', bgHover: '#f4ede8', bgActive: '#e9e2dd',
+      border: '#ece5df', borderStrong: '#cecacd',
+      text: '#575279', textDim: '#797593', textFaint: '#9893a5',
+      accent: '#907aa9', red: '#b4637a', yellow: '#ea9d34', green: '#56949f',
+      string: '#ea9d34', number: '#b4637a', key: '#907aa9', nil: '#9893a5', fn: '#d7827e', node: '#286983',
+      light: true,
+    },
+  },
+  {
+    id: 'catppuccin-latte',
+    name: 'Catppuccin Latte',
+    palette: {
+      bg: '#eff1f5', bgElev: '#e6e9ef', bgHover: '#e4e7ed', bgActive: '#d6dae3',
+      border: '#dce0e8', borderStrong: '#bcc0cc',
+      text: '#4c4f69', textDim: '#5c5f77', textFaint: '#8c8fa1',
+      accent: '#8839ef', red: '#d20f39', yellow: '#df8e1d', green: '#40a02b',
+      string: '#40a02b', number: '#fe640b', key: '#7287fd', nil: '#8c8fa1', fn: '#1e66f5', node: '#8839ef',
+      light: true,
+    },
+  },
 ];
 
 export const themeById = (id: string) => THEMES.find((t) => t.id === id) ?? THEMES[0];
@@ -187,6 +288,12 @@ export function themeVars(theme: Theme, translucent: boolean, opacity: number): 
     '--fab-fg': p.fab ?? p.accent,
     '--radius': `${p.radius ?? 12}px`,
     '--blur': translucent ? 'blur(18px) saturate(160%)' : 'none',
+    '--scheme': p.light ? 'light' : 'dark',
+    '--ring': p.light ? 'rgba(15, 23, 42, 0.1)' : 'rgba(0, 0, 0, 0.8)',
+    '--ring-strong': p.light ? 'rgba(15, 23, 42, 0.14)' : 'rgba(0, 0, 0, 0.9)',
+    '--shadow': p.light ? 'rgba(15, 23, 42, 0.16)' : 'rgba(0, 0, 0, 0.55)',
+    '--shadow-soft': p.light ? 'rgba(15, 23, 42, 0.12)' : 'rgba(0, 0, 0, 0.45)',
+    '--on-yellow': p.light ? '#fff' : '#000',
   } as CSSProperties;
 }
 

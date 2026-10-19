@@ -5,6 +5,7 @@ import { ConsoleTab } from './ConsoleTab';
 import { IconAssistant, IconClose, IconGear, IconMaximize, IconMinimize, Logo } from './Icons';
 import { NetworkTab } from './NetworkTab';
 import { fontById, loadFont } from './fonts';
+import { isErrorEntry } from './format';
 import { DEFAULT_APPEARANCE, Settings, type Appearance, type SettingsSection } from './Settings';
 import { themeById, themeVars, typographyVars } from './themes';
 import { usePersistentState } from './usePersistentState';
@@ -61,7 +62,7 @@ export function App({ store, onTogglePanelRequest }: Props) {
   // Button position is stored as a 0..1 ratio of the free area, so it survives window resizes.
   const [ratio, setRatio, ratioLoaded] = usePersistentState('button', { x: 1, y: 1 });
   const [tab, setTab] = usePersistentState<Tab>('tab', 'network');
-  const [size, setSize] = usePersistentState<Size>('panel', { w: 780, h: 480 });
+  const [size, setSize] = usePersistentState<Size>('panel', { w: 646, h: 660 });
   const [maximized, setMaximized] = usePersistentState('maximized', false);
   // Free panel position (0..1 ratio) once the user drags it by the header; null = anchored to the button.
   const [panelPos, setPanelPos] = usePersistentState<{ x: number; y: number } | null>('panelPos', null);
@@ -355,6 +356,7 @@ const Panel = memo(function Panel({ hidden, store, snap, vp, button, size, onRes
   };
 
   const requestCount = snap.requests.length;
+  const requestErrors = useMemo(() => snap.requests.filter(isErrorEntry).length, [snap.requests]);
 
   return (
     <div
@@ -379,6 +381,11 @@ const Panel = memo(function Panel({ hidden, store, snap, vp, button, size, onRes
           <button type="button" role="tab" aria-selected={tab === 'network'} className="fdt-tab" onClick={() => onTab('network')}>
             Network
             {requestCount > 0 && <span className="fdt-count">{requestCount}</span>}
+            {requestErrors > 0 && (
+              <span className="fdt-count is-error" title="Requisições com falha ou status >= 400">
+                {requestErrors}
+              </span>
+            )}
           </button>
           <button type="button" role="tab" aria-selected={tab === 'console'} className="fdt-tab" onClick={() => onTab('console')}>
             Console

@@ -25,6 +25,11 @@ export const DEFAULT_APPEARANCE: Appearance = {
   fontInUi: false,
 };
 
+const THEME_GROUPS = [
+  { label: 'Escuros', light: false },
+  { label: 'Claros', light: true },
+];
+
 const WEIGHTS: { value: FontWeight; label: string }[] = [
   { value: 400, label: 'Regular' },
   { value: 500, label: 'Médio' },
@@ -192,32 +197,37 @@ function AppearanceSettings({ value, set }: { value: Appearance; set: (patch: Pa
       </div>
 
       <h3>Tema</h3>
-      <div className="theme-grid" role="radiogroup" aria-label="Tema">
-        {THEMES.map((t) => {
-          const p = t.palette;
-          return (
-            <button
-              key={t.id}
-              type="button"
-              role="radio"
-              aria-checked={value.theme === t.id}
-              className="theme-card"
-              onClick={() => set({ theme: t.id })}
-              title={t.name}
-            >
-              <span className="theme-swatch" style={{ background: p.bg, border: `1px solid ${p.borderStrong}` }}>
-                <span className="theme-swatch-line" style={{ background: p.accent, width: '55%' }} />
-                <span className="theme-swatch-dots">
-                  {[p.red, p.yellow, p.green, p.key, p.fn].map((c, i) => (
-                    <span key={i} style={{ background: c }} />
-                  ))}
-                </span>
-              </span>
-              <span className="theme-name">{t.name}</span>
-            </button>
-          );
-        })}
-      </div>
+      {THEME_GROUPS.map((g) => (
+        <div key={g.label} className="theme-group">
+          <span className="settings-hint">{g.label}</span>
+          <div className="theme-grid" role="radiogroup" aria-label={`Temas ${g.label.toLowerCase()}`}>
+            {THEMES.filter((t) => !!t.palette.light === g.light).map((t) => {
+              const p = t.palette;
+              return (
+                <button
+                  key={t.id}
+                  type="button"
+                  role="radio"
+                  aria-checked={value.theme === t.id}
+                  className="theme-card"
+                  onClick={() => set({ theme: t.id })}
+                  title={t.name}
+                >
+                  <span className="theme-swatch" style={{ background: p.bg, border: `1px solid ${p.borderStrong}` }}>
+                    <span className="theme-swatch-line" style={{ background: p.accent, width: '55%' }} />
+                    <span className="theme-swatch-dots">
+                      {[p.red, p.yellow, p.green, p.key, p.fn].map((c, i) => (
+                        <span key={i} style={{ background: c }} />
+                      ))}
+                    </span>
+                  </span>
+                  <span className="theme-name">{t.name}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      ))}
     </>
   );
 }
