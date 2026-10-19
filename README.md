@@ -79,6 +79,16 @@ Abra `chrome://extensions` (ou `brave://extensions`), ative o **Modo do desenvol
   - **Performance**: requisições lentas (duração total; TTFB e download aparecem separados quando há dados de timing),
     recursos pesados e chamadas idênticas repetidas na mesma janela ("potencialmente duplicadas" — polling e novas
     tentativas também repetem chamadas).
+  **Relatório** (na barra do Insights, ou em um diagnóstico) gera um relatório de bug revisável: título, resumo e
+  passos para reproduzir editáveis; escolha das seções (ambiente, diagnósticos, erros, requisições) e dos
+  diagnósticos; URL sem valores de query; ambiente (navegador, viewport, idioma, fuso); diagnósticos com evidências
+  e hipóteses separadas; erros agrupados com contagem, horários e stack; requisições relacionadas com status,
+  duração e TTFB; e as relações de confiança média/alta entre erros e requisições. Exporta em **Markdown**,
+  **GitHub Issue** (seções longas recolhíveis; **Abrir issue ↗** abre `github.com/<owner/repo>/issues/new` com título
+  e corpo — se o corpo for longo demais para a URL, ele é copiado para você colar) e **JSON** (estrutura versionada).
+  Todo texto capturado passa pelo mascaramento; o texto final pode ser editado à mão antes de copiar ou baixar.
+  Aberto a partir de um diagnóstico, o relatório traz só os eventos dele; pelo botão geral, inclui também os demais
+  erros e requisições com falha. O relatório usa os dados do momento em que foi aberto (**Atualizar dados** recria).
   O painel **Performance de rede** traz os rankings das requisições **mais lentas** (barra com as fases reais:
   fila/conexão, espera do servidor/TTFB e download — ou "sem fases" quando o navegador não expõe o timing) e dos
   recursos **mais pesados** (bytes transferidos, ou tamanho do corpo quando veio do cache), a mediana das chamadas de

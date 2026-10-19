@@ -10,6 +10,7 @@ import { formatClock, formatMs, isErrorEntry } from './format';
 import { IconAssistant, IconChevron } from './Icons';
 import { CATEGORY_LABEL, SEVERITY_LABEL } from './labels';
 import { PerformancePanel } from './PerformancePanel';
+import { ReportView } from './ReportView';
 
 
 
@@ -56,6 +57,8 @@ export function InsightsTab({ store, snap, limits, onNavigate, onInvestigate }: 
   const [sort, setSort] = useState<Sort>('relevance');
   const [showDismissed, setShowDismissed] = useState(false);
   const [open, setOpen] = useState<ReadonlySet<string>>(() => new Set());
+  /** Report editor: `ids` set when opened from one diagnostic. */
+  const [report, setReport] = useState<{ ids?: string[] } | null>(null);
 
   const { diagnostics, dismissed, requests } = snap;
   const active = useMemo(() => diagnostics.filter((d) => !dismissed.has(d.id)), [diagnostics, dismissed]);
@@ -119,6 +122,9 @@ export function InsightsTab({ store, snap, limits, onNavigate, onInvestigate }: 
   );
   const dismiss = useCallback((id: string, value: boolean) => store.setDismissed(id, value), [store]);
   const ask = useCallback((d: Diagnostic) => onInvestigate({ kind: 'diagnostic', id: d.id }), [onInvestigate]);
+  const reportOne = useCallback((d: Diagnostic) => setReport({ ids: [d.id] }), []);
+
+  if (report) return <ReportView store={store} initialIds={report.ids} onClose={() => setReport(null)} />;
 
   return (
     <div className="ins">
@@ -143,6 +149,9 @@ export function InsightsTab({ store, snap, limits, onNavigate, onInvestigate }: 
           <option value="relevance">Relevância</option>
           <option value="time">Mais recentes</option>
         </select>
+        <button type="button" className="provider-btn ins-report-btn" onClick={() => setReport({})} title="Gerar um relatório de bug revisável com os problemas encontrados">
+          Relatório
+        </button>
       </div>
 
       <div className="ins-scroll">
@@ -178,6 +187,7 @@ export function InsightsTab({ store, snap, limits, onNavigate, onInvestigate }: 
               onDismiss={dismiss}
               onNavigate={onNavigate}
               onAsk={ask}
+              onReport={reportOne}
             />
           ))}
           {!visible.length && (
@@ -252,9 +262,10 @@ interface ItemProps {
   onDismiss: (id: string, value: boolean) => void;
   onNavigate: (ref: EventRef) => void;
   onAsk: (d: Diagnostic) => void;
+  onReport: (d: Diagnostic) => void;
 }
 
-const DiagnosticItem = memo(function DiagnosticItem({ diagnostic: d, dismissed, open, details, onToggle, onDismiss, onNavigate, onAsk }: ItemProps) {
+const DiagnosticItem = memo(function DiagnosticItem({ diagnostic: d, dismissed, open, details, onToggle, onDismiss, onNavigate, onAsk, onReport }: ItemProps) {
   return (
     <div className={`ins-item${open ? ' is-open' : ''}${dismissed ? ' is-dismissed' : ''}`}>
       <button type="button" className="ins-head" aria-expanded={open} onClick={() => onToggle(d.id)}>
@@ -317,6 +328,9 @@ const DiagnosticItem = memo(function DiagnosticItem({ diagnostic: d, dismissed, 
           <div className="ins-actions">
             <button type="button" className="provider-btn is-primary" onClick={() => onAsk(d)} title="Abre o Assistant focado neste diagnóstico e nos eventos relacionados. Nada é enviado até você escolher uma pergunta.">
               <IconAssistant size={13} /> Investigar com IA
+            </button>
+            <button type="button" className="provider-btn" onClick={() => onReport(d)} title="Relatório de bug com este diagnóstico e os eventos dele">
+              Relatório
             </button>
             <button type="button" className="provider-btn" onClick={() => onDismiss(d.id, !dismissed)}>
               {dismissed ? 'Restaurar' : 'Dispensar'}

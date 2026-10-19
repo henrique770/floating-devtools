@@ -2954,3 +2954,151 @@ button.ai-context:focus-visible {
   display: inline-flex !important;
   align-items: center;
 }
+
+/* ---------------------------------------------------------------- bug report */
+
+.ins-report-btn {
+  height: calc(var(--fs) * 1.8333) !important;
+}
+
+.rep {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.rep-title {
+  flex: 1;
+  font-weight: 600;
+}
+
+.rep-scroll {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 10px 12px;
+}
+
+.rep-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.rep-field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  color: var(--text-dim);
+  font-size: calc(var(--fs) * 0.9167);
+}
+
+.rep-field small {
+  color: var(--text-faint);
+  font-size: inherit;
+}
+
+.rep-field .fdt-input {
+  width: 100%;
+  font-size: var(--fs);
+}
+
+.rep-textarea {
+  height: auto;
+  padding: 5px 8px;
+  resize: vertical;
+  font-family: var(--sans);
+  line-height: 1.4;
+}
+
+.rep-include,
+.rep-diags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin: 0;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.rep-include legend,
+.rep-diags legend {
+  padding: 0 4px;
+  color: var(--text-dim);
+  font-size: calc(var(--fs) * 0.9167);
+}
+
+.rep-diags {
+  flex-direction: column;
+  flex-wrap: nowrap;
+  max-height: 180px;
+  overflow-y: auto;
+}
+
+.rep-diag {
+  min-width: 0;
+  gap: 6px;
+  color: var(--text);
+}
+
+.rep-output {
+  margin-top: 12px;
+}
+
+.rep-output-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.rep-note {
+  margin: 6px 0;
+  color: var(--text-dim);
+  font-size: calc(var(--fs) * 0.9167);
+}
+
+.rep-note.is-masked {
+  color: var(--text);
+}
+
+.rep-text {
+  width: 100%;
+  height: 300px;
+  min-height: 160px;
+  padding: 8px;
+  resize: vertical;
+  font-family: var(--mono);
+  font-size: calc(var(--fs) * 0.9167);
+  line-height: 1.45;
+  white-space: pre;
+}
+
+.rep-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.rep-actions .provider-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.rep-github {
+  display: inline-flex;
+  gap: 6px;
+}
+
+.rep-github .fdt-input {
+  width: 150px;
+  flex: none;
+}
+
+.rep-status {
+  color: var(--text-dim);
+  font-size: calc(var(--fs) * 0.9167);
+}
