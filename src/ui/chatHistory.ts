@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import type { FocusTarget } from './focusContext';
 
 const HISTORY_KEY = 'ai.history';
 const MAX_CONVERSATIONS = 50;
@@ -14,6 +15,14 @@ export interface Conversation {
   createdAt: number;
   updatedAt: number;
   messages: ChatEntry[];
+  /** Item the conversation is about (already masked), so follow-ups keep its context after reopening. */
+  focus?: SavedFocus;
+}
+
+export interface SavedFocus {
+  target: FocusTarget;
+  title: string;
+  text: string;
 }
 
 const read = async () => ((await chrome.storage.local.get(HISTORY_KEY))[HISTORY_KEY] as Conversation[] | undefined) ?? [];

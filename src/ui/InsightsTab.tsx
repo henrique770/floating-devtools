@@ -2,16 +2,16 @@ import { memo, useCallback, useMemo, useState } from 'react';
 import { relatedLogs, relatedRequests, type Correlation } from '../analysis/correlate';
 import { CATEGORIES, SEVERITIES, severityRank, type Category, type Diagnostic, type EventRef, type InsightsConfig, type Severity } from '../analysis/diagnostics/types';
 import { summarize } from '../analysis/performance';
-import { redactText } from '../analysis/redact';
 import type { DevtoolsStore, Snapshot } from '../content/store';
 import type { ConsoleEntry, NetworkEntry } from '../shared/types';
 import { CorrelationList, logLabel, requestLabel, type EventLabel } from './Correlations';
+import type { FocusTarget } from './focusContext';
 import { formatClock, formatMs, isErrorEntry } from './format';
 import { IconAssistant, IconChevron } from './Icons';
+import { CATEGORY_LABEL, SEVERITY_LABEL } from './labels';
 import { PerformancePanel } from './PerformancePanel';
 
-export const SEVERITY_LABEL: Record<Severity, string> = { high: 'Alta', medium: 'Média', low: 'Baixa', info: 'Info' };
-export const CATEGORY_LABEL: Record<Category, string> = { javascript: 'JavaScript', network: 'Network', storage: 'Storage', performance: 'Performance' };
+
 
 const SEVERITY_FILTERS: { key: string; label: string; match: (s: Severity) => boolean }[] = [
   { key: 'relevant', label: 'Relevantes', match: (s) => s !== 'info' },
@@ -45,10 +45,10 @@ interface Props {
   snap: Snapshot;
   limits: InsightsConfig;
   onNavigate: (ref: EventRef) => void;
-  onAskAi: (text: string) => void;
+  onInvestigate: (target: FocusTarget) => void;
 }
 
-export function InsightsTab({ store, snap, limits, onNavigate, onAskAi }: Props) {
+export function InsightsTab({ store, snap, limits, onNavigate, onInvestigate }: Props) {
   const { slowMs } = limits;
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState('all');
@@ -118,7 +118,7 @@ export function InsightsTab({ store, snap, limits, onNavigate, onAskAi }: Props)
     [],
   );
   const dismiss = useCallback((id: string, value: boolean) => store.setDismissed(id, value), [store]);
-  const ask = useCallback((d: Diagnostic) => onAskAi(aiPrompt(d)), [onAskAi]);
+  const ask = useCallback((d: Diagnostic) => onInvestigate({ kind: 'diagnostic', id: d.id }), [onInvestigate]);
 
   return (
     <div className="ins">
@@ -315,7 +315,7 @@ const DiagnosticItem = memo(function DiagnosticItem({ diagnostic: d, dismissed, 
             {d.count} {d.count === 1 ? 'ocorrência' : 'ocorrências'} · primeira {formatClock(d.firstTime)} · última {formatClock(d.lastTime)}
           </p>
           <div className="ins-actions">
-            <button type="button" className="provider-btn is-primary" onClick={() => onAsk(d)} title="Abre o Assistant com a pergunta preenchida para você revisar antes de enviar">
+            <button type="button" className="provider-btn is-primary" onClick={() => onAsk(d)} title="Abre o Assistant focado neste diagnóstico e nos eventos relacionados. Nada é enviado até você escolher uma pergunta.">
               <IconAssistant size={13} /> Investigar com IA
             </button>
             <button type="button" className="provider-btn" onClick={() => onDismiss(d.id, !dismissed)}>
@@ -342,19 +342,4 @@ function Block({ title, hint, items }: { title: string; hint?: string; items: st
       </ul>
     </>
   );
-}
-
-/** Question prefilled in the Assistant: the diagnostic, with facts and hypotheses kept apart, secrets masked. */
-export function aiPrompt(d: Diagnostic): string {
-  const list = (items: string[]) => items.map((t) => `- ${t}`).join('\n');
-  return [
-    `Investigue este diagnóstico do Floating DevTools: **${d.title}** (${CATEGORY_LABEL[d.category]}, severidade ${SEVERITY_LABEL[d.severity].toLowerCase()}, ${d.count} ${d.count === 1 ? 'ocorrência' : 'ocorrências'}).`,
-    d.description,
-    `Evidências observadas:\n${list(d.evidence)}`,
-    d.causes.length ? `Hipóteses levantadas localmente (não confirmadas):\n${list(d.causes)}` : '',
-    'Explique o problema, diga quais hipóteses os dados sustentam, como investigar e como corrigir.',
-  ]
-    .filter(Boolean)
-    .map(redactText)
-    .join('\n\n');
 }

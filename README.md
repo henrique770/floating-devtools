@@ -66,8 +66,7 @@ Abra `chrome://extensions` (ou `brave://extensions`), ative o **Modo do desenvol
   totais (requisições, erros, avisos, diagnósticos, lentas) e distribuição por severidade, e a lista de problemas com
   evidências, possíveis causas, impacto, recomendações e eventos relacionados (clique para abrir a requisição ou o log
   original). Filtros por categoria, severidade e texto; ordenação por relevância ou horário; **Dispensar** esconde um
-  diagnóstico mesmo que ele volte a ocorrer; **Investigar com IA** abre o Assistant com a pergunta preenchida para você
-  revisar antes de enviar. Os limites (requisição lenta, recurso pesado, duplicadas) ficam em **⚙ → Insights**.
+  diagnóstico mesmo que ele volte a ocorrer; **Investigar com IA** abre o Assistant focado no diagnóstico. Os limites (requisição lenta, recurso pesado, duplicadas) ficam em **⚙ → Insights**.
   Regras iniciais:
   - **JavaScript**: exceções não tratadas (TypeError, ReferenceError, SyntaxError…), Promises rejeitadas sem tratamento,
     `Error` registrado com `console.error` e scripts que não carregaram. Um `console.error("texto")` simples não vira
@@ -95,7 +94,16 @@ Abra `chrome://extensions` (ou `brave://extensions`), ative o **Modo do desenvol
   em URL, e-mails, CPFs e números de cartão são mascarados como `[REDACTED:tipo]` antes de sair do navegador
   (`src/analysis/redact.ts`). Clique em **Contexto** na barra do Assistant para ver o texto exato que será enviado e
   quantos valores foram mascarados. Os dados capturados vão em um bloco delimitado na mensagem do usuário, nunca nas
-  instruções de sistema, e o modelo é instruído a tratá-los como dados não confiáveis (eles vêm da página). Novos providers compatíveis com a API da OpenAI entram em `src/shared/ai.ts`.
+  instruções de sistema, e o modelo é instruído a tratá-los como dados não confiáveis (eles vêm da página).
+  **Investigar com IA** — em um erro/aviso do Console (ícone do assistente), nos detalhes de uma requisição (**IA**) ou
+  em um diagnóstico do Insights — inicia uma conversa focada naquele item: o Assistant recebe o item em detalhe
+  (mensagem e stack; ou status, timing com TTFB, headers sem credenciais, iniciador e trechos mascarados do payload e da
+  resposta; ou o diagnóstico com evidências e hipóteses separadas), os eventos relacionados com o grau de confiança e
+  os diagnósticos que o envolvem, seguido de uma visão geral reduzida da página. Nada é enviado até você escolher uma
+  das ações rápidas (Explique este erro, Qual pode ser a causa?, Como corrigir?, Analise esta requisição, Existe
+  problema de performance?…) ou escrever a pergunta; **Ver contexto** mostra o texto exato. O foco fica salvo com a
+  conversa no histórico, para perguntas de acompanhamento. Sem foco, a visão geral inclui também os diagnósticos do
+  Insights ("Resuma os problemas da sessão"). Código sugerido pela IA nunca é executado: os blocos só têm "copiar". Novos providers compatíveis com a API da OpenAI entram em `src/shared/ai.ts`.
   As respostas usam a fonte e o tema escolhidos (inclusive nas cores do código), cada bloco de código tem
   botão de copiar, e as conversas ficam salvas no histórico (🕘, até 50, com busca) para retomar depois.
 

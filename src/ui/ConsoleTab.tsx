@@ -7,7 +7,8 @@ import type { DevtoolsStore } from '../content/store';
 import type { ConsoleEntry, ConsoleLevel, NetworkEntry, SerializedValue } from '../shared/types';
 import { CorrelationList, requestLabel, type EventLabel } from './Correlations';
 import { formatClock } from './format';
-import { IconChevron, IconClear } from './Icons';
+import type { FocusTarget } from './focusContext';
+import { IconAssistant, IconChevron, IconClear } from './Icons';
 import { usePersistentState } from './usePersistentState';
 import { preview, ValueView } from './ValueView';
 
@@ -38,6 +39,7 @@ interface Relations {
   find: (entry: ConsoleEntry) => Correlation[];
   label: (ref: EventRef) => EventLabel;
   open: (ref: EventRef) => void;
+  investigate: (target: FocusTarget) => void;
 }
 const RelationsContext = createContext<Relations | null>(null);
 
@@ -63,11 +65,12 @@ interface Props {
   requests: NetworkEntry[];
   active: boolean;
   onNavigate: (ref: EventRef) => void;
+  onInvestigate: (target: FocusTarget) => void;
   /** Entry to reveal (navigation from Insights); the nonce makes repeated clicks re-trigger. */
   focus?: { id: string; nonce: number };
 }
 
-export function ConsoleTab({ store, logs, groups, requests, active, focus, onNavigate }: Props) {
+export function ConsoleTab({ store, logs, groups, requests, active, focus, onNavigate, onInvestigate }: Props) {
   const [query, setQuery] = useState('');
   const [level, setLevel] = useState('all');
   const [origin, setOrigin] = useState('all');
@@ -82,11 +85,14 @@ export function ConsoleTab({ store, logs, groups, requests, active, focus, onNav
   requestsRef.current = requests;
   const navigateRef = useRef(onNavigate);
   navigateRef.current = onNavigate;
+  const investigateRef = useRef(onInvestigate);
+  investigateRef.current = onInvestigate;
   const relations = useMemo<Relations>(
     () => ({
       find: (entry) => relatedRequests(entry, requestsRef.current, location.origin),
       label: (ref) => requestLabel(requestsRef.current.find((r) => r.id === ref.id)),
       open: (ref) => navigateRef.current(ref),
+      investigate: (target) => investigateRef.current(target),
     }),
     [],
   );
@@ -330,6 +336,15 @@ const Message = memo(function Message({ entry: e, showTime, group }: MessageProp
               NET ↗
             </button>
           )}
+          <button
+            type="button"
+            className="msg-rel msg-ai"
+            onClick={() => relations!.investigate({ kind: 'log', id: e.id })}
+            title="Investigar com IA: abre o Assistant focado nesta mensagem e nas requisições relacionadas"
+            aria-label="Investigar com IA"
+          >
+            <IconAssistant size={11} />
+          </button>
           <button
             type="button"
             className={`msg-rel${relatedOpen ? ' is-active' : ''}`}

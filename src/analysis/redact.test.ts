@@ -30,6 +30,8 @@ describe('redact', () => {
 
   it('keeps fields that only look similar, and empty or literal values', () => {
     expect(redactText('{"author":"Ana","tokens":5,"password":"","token":null}')).toBe('{"author":"Ana","tokens":5,"password":"","token":null}');
+    // safeUrl() already replaced query values with an ellipsis
+    expect(redact('/api?expand=…&token=…').total).toBe(0);
   });
 
   it('masks credentials in URLs and private keys', () => {

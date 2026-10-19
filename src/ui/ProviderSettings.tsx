@@ -32,7 +32,8 @@ export function ProviderSettings() {
       <p className="settings-hint settings-note">
         Traga sua própria API key. Ela fica salva só neste navegador e é usada direto pela extensão — nunca passa pela página. Ao perguntar,
         um resumo dos erros, avisos e requisições é enviado ao provider — sem headers, cookies, corpos de requisição ou valores de query string,
-        e com tokens, chaves, senhas, e-mails, CPFs e cartões mascarados. Você pode ver o texto exato em “Contexto” na aba Assistant.
+        e com tokens, chaves, senhas, e-mails, CPFs e cartões mascarados. Ao usar “Investigar com IA” em um item, vão também uma seleção de headers sem credenciais e trechos mascarados do payload e da resposta
+        desse item. Você pode ver o texto exato em “Contexto” na aba Assistant.
       </p>
       <div className="provider-list">
         {PROVIDERS.map((p) => (

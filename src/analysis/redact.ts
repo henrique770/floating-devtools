@@ -83,7 +83,7 @@ const PATTERNS: Pattern[] = [
     replace: (m, q, name, sep, dq, sq, bare) => {
       const value = dq ?? sq ?? bare ?? '';
       // Already masked, empty/literal, or an auth scheme whose token the 'token' pattern already masked.
-      if (!value || value.startsWith('[REDACTED') || /^(?:null|undefined|true|false|Bearer|Basic|Token|Digest|Negotiate)$/i.test(value)) return m;
+      if (!value || value.startsWith('[REDACTED') || /^(?:…|null|undefined|true|false|Bearer|Basic|Token|Digest|Negotiate)$/i.test(value)) return m;
       const quote = dq !== undefined ? '"' : sq !== undefined ? "'" : '';
       return `${q}${name}${q}${sep}${quote}${tag('secret')}${quote}`;
     },

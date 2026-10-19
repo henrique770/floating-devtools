@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { DevtoolsStore, Snapshot } from '../content/store';
 import { AI_PORT, type AiRequest, type AiResponse } from '../shared/ai';
 import { describeRedactions } from '../analysis/redact';
-import { buildContext, buildPayload } from './assistantContext';
+import { buildContext, buildPayload, OVERVIEW_WITH_FOCUS } from './assistantContext';
 import {
   clearHistory,
   deleteConversation,
@@ -13,7 +13,9 @@ import {
   useChatHistory,
   type ChatEntry,
   type Conversation,
+  type SavedFocus,
 } from './chatHistory';
+import { buildFocusContext, quickActions, type FocusContext, type FocusTarget } from './focusContext';
 import { isErrorEntry } from './format';
 import { IconAssistant, IconHistory, IconPlus, IconSend, IconStop, IconTrash } from './Icons';
 import { Markdown } from './Markdown';
@@ -22,24 +24,30 @@ import { activeProvider, useAiConfig } from './useAiConfig';
 const MAX_HISTORY = 20;
 
 type Message = ChatEntry;
-type ConversationMeta = Pick<Conversation, 'id' | 'title' | 'host' | 'createdAt' | 'provider'>;
+type ConversationMeta = Pick<Conversation, 'id' | 'title' | 'host' | 'createdAt' | 'provider' | 'focus'>;
+/** Focus as used by the tab: freshly built (with masking stats) or restored from history. */
+type Focus = SavedFocus & { redactions?: FocusContext['redactions'] };
+
+const FOCUS_KIND: Record<FocusTarget['kind'], string> = { log: 'Log', request: 'Requisição', diagnostic: 'Diagnóstico' };
 
 interface Props {
   store: DevtoolsStore;
   snap: Snapshot;
   active: boolean;
   onOpenSettings: () => void;
-  /** Question prepared elsewhere (e.g. "Investigar com IA" in Insights), put in the input for review — never sent automatically. */
-  draft?: { text: string; nonce: number };
+  /** Item chosen with "Investigar com IA": starts a conversation focused on it. Nothing is sent until the user asks. */
+  investigate?: { target: FocusTarget; nonce: number };
 }
 
-export function AssistantTab({ store, snap, active, onOpenSettings, draft }: Props) {
+export function AssistantTab({ store, snap, active, onOpenSettings, investigate }: Props) {
   const [config] = useAiConfig();
   const current = activeProvider(config);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState<false | 'waiting' | 'thinking' | 'streaming'>(false);
   const [view, setView] = useState<'chat' | 'history' | 'context'>('chat');
+  const [focus, setFocus] = useState<Focus | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const history = useChatHistory();
   const meta = useRef<ConversationMeta | null>(null);
   // Set when this tab changed the conversation, so merely opening one from the history doesn't re-save it.
@@ -51,13 +59,7 @@ export function AssistantTab({ store, snap, active, onOpenSettings, draft }: Pro
 
   const failed = useMemo(() => snap.requests.filter(isErrorEntry).length, [snap.requests]);
 
-  const suggestions = useMemo(() => {
-    const list = ['Resuma os logs'];
-    if (snap.errors) list.push('Quais erros devo resolver primeiro?', 'Explique o último erro do console');
-    if (failed) list.push('Por que essas requisições estão falhando?');
-    list.push('Recomende melhorias', 'Existe algum problema de performance?');
-    return list.slice(0, 5);
-  }, [snap.errors, failed]);
+  const actions = useMemo(() => quickActions(focus ? { ...focus, redactions: focus.redactions ?? { found: {}, total: 0 } } : null, snap), [focus, snap]);
 
   useLayoutEffect(() => {
     const el = listRef.current;
@@ -72,17 +74,19 @@ export function AssistantTab({ store, snap, active, onOpenSettings, draft }: Pro
 
   useEffect(() => () => port.current?.disconnect(), []);
 
+  // "Investigar com IA": a new conversation about that item. The context is built now, from what is captured.
   useEffect(() => {
-    if (!draft) return;
+    if (!investigate) return;
+    leave();
+    meta.current = null;
+    setMessages([]);
     setView('chat');
-    setInput(draft.text);
-    requestAnimationFrame(() => {
-      const el = inputRef.current;
-      if (!el) return;
-      el.focus({ preventScroll: true });
-      el.setSelectionRange(el.value.length, el.value.length);
-    });
-  }, [draft]);
+    const ctx = buildFocusContext(investigate.target, store.getSnapshot());
+    setFocus(ctx);
+    setNotice(ctx ? null : 'Esse item não está mais capturado (saiu do buffer ou foi limpo).');
+    requestAnimationFrame(() => inputRef.current?.focus({ preventScroll: true }));
+    // Only on a new request; leave() reads the current conversation through refs/state at that moment.
+  }, [investigate]);
 
   // Persist once the answer is complete (not on every streamed token).
   useEffect(() => {
@@ -101,9 +105,18 @@ export function AssistantTab({ store, snap, active, onOpenSettings, draft }: Pro
     const question = text.trim();
     if (!question || busy || !current) return;
     const thread: Message[] = [...messages.filter((m) => !m.error), { role: 'user', content: question }];
-    // The context is rebuilt on every question, so the answer reflects what was captured up to now.
-    const payload = buildPayload(thread.slice(-MAX_HISTORY), buildContext(store.getSnapshot()).text);
-    meta.current ??= { id: newConversationId(), title: titleFrom(question), host: location.host, createdAt: Date.now(), provider: current.provider.name };
+    // The page overview is rebuilt on every question; the focus block stays as it was when the item was chosen.
+    const overview = buildContext(store.getSnapshot(), focus ? OVERVIEW_WITH_FOCUS : undefined).text;
+    const payload = buildPayload(thread.slice(-MAX_HISTORY), overview, focus ?? undefined);
+    meta.current ??= {
+      id: newConversationId(),
+      title: titleFrom(focus ? `${focus.title} — ${question}` : question),
+      host: location.host,
+      createdAt: Date.now(),
+      provider: current.provider.name,
+      focus: focus ? { target: focus.target, title: focus.title, text: focus.text } : undefined,
+    };
+    setNotice(null);
     dirty.current = true;
     setView('chat');
     setMessages([...messages, { role: 'user', content: question }]);
@@ -157,13 +170,17 @@ export function AssistantTab({ store, snap, active, onOpenSettings, draft }: Pro
     leave();
     meta.current = null;
     setMessages([]);
+    setFocus(null);
+    setNotice(null);
     setView('chat');
     inputRef.current?.focus();
   };
 
   const open = (c: Conversation) => {
     leave();
-    meta.current = { id: c.id, title: c.title, host: c.host, createdAt: c.createdAt, provider: c.provider };
+    meta.current = { id: c.id, title: c.title, host: c.host, createdAt: c.createdAt, provider: c.provider, focus: c.focus };
+    setFocus(c.focus ?? null);
+    setNotice(null);
     dirty.current = false;
     stickToBottom.current = true;
     setMessages(c.messages);
@@ -178,7 +195,7 @@ export function AssistantTab({ store, snap, active, onOpenSettings, draft }: Pro
   return (
     <div className="ai">
       <div className="toolbar">
-        <button type="button" className="fdt-icon-btn" onClick={reset} title="Nova conversa" disabled={!messages.length && view === 'chat'}>
+        <button type="button" className="fdt-icon-btn" onClick={reset} title="Nova conversa" disabled={!messages.length && !focus && view === 'chat'}>
           <IconPlus />
         </button>
         <button
@@ -207,7 +224,7 @@ export function AssistantTab({ store, snap, active, onOpenSettings, draft }: Pro
       {view === 'history' ? (
         <HistoryList list={history} currentId={meta.current?.id} onOpen={open} onDelete={remove} />
       ) : view === 'context' ? (
-        <ContextPreview snap={snap} onClose={() => setView('chat')} />
+        <ContextPreview snap={snap} focus={focus} onClose={() => setView('chat')} />
       ) : (
         <div
           className="ai-list"
@@ -229,12 +246,25 @@ export function AssistantTab({ store, snap, active, onOpenSettings, draft }: Pro
           ) : !messages.length ? (
             <div className="ai-welcome">
               <IconAssistant size={36} className="ai-sparkle" />
-              <p>Olá! Eu vejo o que o DevTools capturou nesta página — erros, avisos e requisições. Pergunte o que quiser.</p>
-              <p>Não sabe o que perguntar? Escolha uma das opções:</p>
+              {notice && <p className="ai-notice">{notice}</p>}
+              {focus ? (
+                <>
+                  <p>
+                    Vou analisar {focus.target.kind === 'request' ? 'esta requisição' : focus.target.kind === 'log' ? 'este erro' : 'este diagnóstico'} com os
+                    eventos relacionados. Nada foi enviado ainda: escolha uma pergunta ou escreva a sua.
+                  </p>
+                  <p className="muted">Você pode revisar o contexto exato em “Ver contexto”.</p>
+                </>
+              ) : (
+                <>
+                  <p>Olá! Eu vejo o que o DevTools capturou nesta página — erros, avisos, requisições e os diagnósticos do Insights. Pergunte o que quiser.</p>
+                  <p>Não sabe o que perguntar? Escolha uma das opções:</p>
+                </>
+              )}
               <div className="ai-suggestions">
-                {suggestions.map((s) => (
-                  <button key={s} type="button" className="ai-suggestion" onClick={() => send(s)}>
-                    {s}
+                {actions.map((a) => (
+                  <button key={a.label} type="button" className="ai-suggestion" onClick={() => send(a.question)} title={a.question}>
+                    {a.label}
                   </button>
                 ))}
               </div>
@@ -265,6 +295,38 @@ export function AssistantTab({ store, snap, active, onOpenSettings, draft }: Pro
         </div>
       )}
 
+      {focus && view === 'chat' && (
+        <div className="ai-focus">
+          <div className="ai-focus-head">
+            <span className="ai-focus-kind">{FOCUS_KIND[focus.target.kind]}</span>
+            <span className="ai-focus-title" title={focus.title}>
+              {focus.title}
+            </span>
+            <button type="button" className="link-btn" onClick={() => setView('context')}>
+              Ver contexto
+            </button>
+            <button
+              type="button"
+              className="fdt-icon-btn ai-focus-clear"
+              onClick={() => setFocus(null)}
+              disabled={!!messages.length}
+              title={messages.length ? 'O foco faz parte desta conversa; comece uma nova para trocar' : 'Remover o foco'}
+              aria-label="Remover o foco"
+            >
+              ×
+            </button>
+          </div>
+          {messages.length > 0 && !busy && (
+            <div className="ai-quick" role="group" aria-label="Ações rápidas">
+              {actions.map((a) => (
+                <button key={a.label} type="button" className="ai-suggestion" onClick={() => send(a.question)} title={a.question}>
+                  {a.label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
       <p className="ai-disclaimer">A IA pode cometer erros. Por isso, é importante checar as respostas.</p>
       <div className="ai-input">
         <textarea
@@ -296,15 +358,20 @@ export function AssistantTab({ store, snap, active, onOpenSettings, draft }: Pro
 }
 
 /** The exact context text the next question will carry, after masking. */
-function ContextPreview({ snap, onClose }: { snap: Snapshot; onClose: () => void }) {
-  const context = useMemo(() => buildContext(snap), [snap]);
-  const { total, found } = context.redactions;
+function ContextPreview({ snap, focus, onClose }: { snap: Snapshot; focus: Focus | null; onClose: () => void }) {
+  const context = useMemo(() => buildContext(snap, focus ? OVERVIEW_WITH_FOCUS : undefined), [snap, focus]);
+  const total = context.redactions.total + (focus?.redactions?.total ?? 0);
+  const found = { ...context.redactions.found };
+  for (const [k, n] of Object.entries(focus?.redactions?.found ?? {}) as [keyof typeof found, number][]) found[k] = (found[k] ?? 0) + n;
   return (
     <div className="ai-context-view">
       <div className="ai-context-note">
         <p>
-          Este texto é enviado ao provider junto com cada pergunta (recalculado no envio, com o que estiver capturado naquele momento). Headers,
-          cookies, corpos de requisição e valores de query string não são incluídos.
+          Este texto é enviado ao provider junto com cada pergunta (a visão geral é recalculada no envio). Valores de query string e cookies nunca
+          são incluídos.{' '}
+          {focus
+            ? 'Do item em foco entram também uma seleção de headers sem credenciais e trechos do payload e da resposta, já mascarados.'
+            : 'Headers e corpos de requisição não são incluídos.'}
         </p>
         <p>
           {total ? (
@@ -320,6 +387,13 @@ function ContextPreview({ snap, onClose }: { snap: Snapshot; onClose: () => void
           Voltar para a conversa
         </button>
       </div>
+      {focus && (
+        <>
+          <h4 className="ai-context-heading">Item em foco: {focus.title}</h4>
+          <pre className="code-block ai-context-text">{focus.text}</pre>
+          <h4 className="ai-context-heading">Visão geral da página</h4>
+        </>
+      )}
       <pre className="code-block ai-context-text">{context.text}</pre>
     </div>
   );

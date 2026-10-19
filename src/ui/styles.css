@@ -2869,3 +2869,88 @@ button.ai-context:focus-visible {
 .ins-perf-head .segmented button {
   white-space: nowrap;
 }
+
+/* ---------------------------------------------------------------- assistant: focused investigation */
+
+.ai-focus {
+  margin: 0 10px 4px;
+  padding: 6px 8px;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  background: var(--bg-elev);
+}
+
+.ai-focus-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.ai-focus-kind {
+  flex: none;
+  padding: 0 6px;
+  border-radius: 4px;
+  background: var(--bg-selected);
+  color: var(--text);
+  font-size: calc(var(--fs) * 0.8333);
+  font-weight: 600;
+  line-height: calc(var(--fs) * 1.5);
+}
+
+.ai-focus-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--mono);
+  font-size: calc(var(--fs) * 0.9167);
+  color: var(--text);
+}
+
+.ai-focus-clear {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  font-size: calc(var(--fs) * 1.25);
+  line-height: 1;
+}
+
+.ai-focus-clear:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.ai-quick {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.ai-quick .ai-suggestion {
+  padding: 2px 8px !important;
+  font-size: calc(var(--fs) * 0.9167);
+}
+
+.ai-notice {
+  color: var(--yellow);
+}
+
+.ai-context-heading {
+  margin: 10px 12px 0;
+  font-size: calc(var(--fs) * 0.9167);
+  font-weight: 600;
+  color: var(--text-dim);
+}
+
+.detail-ai {
+  padding: 0 8px !important;
+  white-space: nowrap;
+}
+
+.msg-ai {
+  display: inline-flex !important;
+  align-items: center;
+}

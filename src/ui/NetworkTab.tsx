@@ -4,6 +4,7 @@ import type { EventRef } from '../analysis/diagnostics/types';
 import type { DevtoolsStore } from '../content/store';
 import type { ConsoleEntry, NetworkEntry } from '../shared/types';
 import { CompareView } from './CompareView';
+import type { FocusTarget } from './focusContext';
 import { CorrelationList, logLabel } from './Correlations';
 import { Section } from './Section';
 import {
@@ -22,7 +23,7 @@ import {
   TYPE_FILTERS,
   typeLabel,
 } from './format';
-import { IconBack, IconClear, IconClose, IconCopy, IconRecord } from './Icons';
+import { IconAssistant, IconBack, IconClear, IconClose, IconCopy, IconRecord } from './Icons';
 import { JsonTree } from './ValueView';
 
 type SortKey = 'start' | 'name' | 'status' | 'type' | 'size' | 'time';
@@ -53,9 +54,10 @@ interface Props {
   focus?: { id: string; nonce: number };
   logs: ConsoleEntry[];
   onNavigate: (ref: EventRef) => void;
+  onInvestigate: (target: FocusTarget) => void;
 }
 
-export function NetworkTab({ store, requests, recording, width, focus, logs, onNavigate }: Props) {
+export function NetworkTab({ store, requests, recording, width, focus, logs, onNavigate, onInvestigate }: Props) {
   const [query, setQuery] = useState('');
   const [typeFilter, setTypeFilter] = useState('all');
   const [errorsOnly, setErrorsOnly] = useState(false);
@@ -242,7 +244,7 @@ export function NetworkTab({ store, requests, recording, width, focus, logs, onN
           />
         )}
         {selected && (
-          <Details entry={selected} narrow={narrow} logs={logs} onNavigate={onNavigate} onCompare={startCompare} onClose={() => setSelectedId(null)} />
+          <Details entry={selected} narrow={narrow} logs={logs} onNavigate={onNavigate} onCompare={startCompare} onInvestigate={onInvestigate} onClose={() => setSelectedId(null)} />
         )}
       </div>
 
@@ -304,10 +306,11 @@ interface DetailsProps {
   logs: ConsoleEntry[];
   onNavigate: (ref: EventRef) => void;
   onCompare: (id: string) => void;
+  onInvestigate: (target: FocusTarget) => void;
   onClose: () => void;
 }
 
-function Details({ entry, narrow, logs, onNavigate, onCompare, onClose }: DetailsProps) {
+function Details({ entry, narrow, logs, onNavigate, onCompare, onInvestigate, onClose }: DetailsProps) {
   const [tab, setTab] = useState<DetailTab>('headers');
   const json = useMemo(() => tryParseJson(entry.responseBody), [entry.responseBody]);
   const hasPayload = !!entry.requestBody || entry.url.includes('?');
@@ -336,6 +339,14 @@ function Details({ entry, narrow, logs, onNavigate, onCompare, onClose }: Detail
           ))}
         <button type="button" className="link-btn detail-compare" onClick={() => onCompare(entry.id)} title="Comparar esta requisição com outra da lista">
           ⇄ Comparar
+        </button>
+        <button
+          type="button"
+          className="link-btn detail-ai"
+          onClick={() => onInvestigate({ kind: 'request', id: entry.id })}
+          title="Investigar com IA: abre o Assistant focado nesta requisição e nos logs relacionados"
+        >
+          <IconAssistant size={12} /> IA
         </button>
       </div>
       <div className="detail-body">

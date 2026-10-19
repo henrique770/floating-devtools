@@ -4,6 +4,7 @@ import type { DevtoolsStore } from '../content/store';
 import { AssistantTab } from './AssistantTab';
 import { ConsoleTab } from './ConsoleTab';
 import { IconAssistant, IconClose, IconGear, IconMaximize, IconMinimize, Logo } from './Icons';
+import type { FocusTarget } from './focusContext';
 import { InsightsTab, notableDiagnostics } from './InsightsTab';
 import { NetworkTab } from './NetworkTab';
 import { fontById, loadFont } from './fonts';
@@ -298,7 +299,7 @@ const Panel = memo(function Panel({ hidden, store, snap, vp, button, size, onRes
   // Cross-tab navigation: Insights -> the original request/log, or -> the Assistant with a prepared question.
   const [netFocus, setNetFocus] = useState<Focus>();
   const [logFocus, setLogFocus] = useState<Focus>();
-  const [aiDraft, setAiDraft] = useState<{ text: string; nonce: number }>();
+  const [aiFocus, setAiFocus] = useState<{ target: FocusTarget; nonce: number }>();
   const navigate = useCallback(
     (ref: EventRef) => {
       const focus = { id: ref.id, nonce: Date.now() };
@@ -308,9 +309,9 @@ const Panel = memo(function Panel({ hidden, store, snap, vp, button, size, onRes
     },
     [onTab],
   );
-  const askAi = useCallback(
-    (text: string) => {
-      setAiDraft({ text, nonce: Date.now() });
+  const investigate = useCallback(
+    (target: FocusTarget) => {
+      setAiFocus({ target, nonce: Date.now() });
       onTab('assistant');
     },
     [onTab],
@@ -488,16 +489,16 @@ const Panel = memo(function Panel({ hidden, store, snap, vp, button, size, onRes
           />
         )}
         <div className="fdt-tab-content" hidden={tab !== 'network'}>
-          <NetworkTab store={store} requests={snap.requests} recording={snap.recording} width={place.w} focus={netFocus} logs={snap.logs} onNavigate={navigate} />
+          <NetworkTab store={store} requests={snap.requests} recording={snap.recording} width={place.w} focus={netFocus} logs={snap.logs} onNavigate={navigate} onInvestigate={investigate} />
         </div>
         <div className="fdt-tab-content" hidden={tab !== 'console'}>
-          <ConsoleTab store={store} logs={snap.logs} groups={snap.groups} requests={snap.requests} active={!hidden && tab === 'console'} focus={logFocus} onNavigate={navigate} />
+          <ConsoleTab store={store} logs={snap.logs} groups={snap.groups} requests={snap.requests} active={!hidden && tab === 'console'} focus={logFocus} onNavigate={navigate} onInvestigate={investigate} />
         </div>
         <div className="fdt-tab-content" hidden={tab !== 'insights'}>
-          <InsightsTab store={store} snap={snap} limits={insights} onNavigate={navigate} onAskAi={askAi} />
+          <InsightsTab store={store} snap={snap} limits={insights} onNavigate={navigate} onInvestigate={investigate} />
         </div>
         <div className="fdt-tab-content" hidden={tab !== 'assistant'}>
-          <AssistantTab store={store} snap={snap} active={!hidden && tab === 'assistant'} onOpenSettings={openProviderSettings} draft={aiDraft} />
+          <AssistantTab store={store} snap={snap} active={!hidden && tab === 'assistant'} onOpenSettings={openProviderSettings} investigate={aiFocus} />
         </div>
       </div>
       {!maximized && (
