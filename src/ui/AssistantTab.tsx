@@ -61,9 +61,11 @@ export function AssistantTab({ store, snap, active, onOpenSettings }: Props) {
     if (el && active && stickToBottom.current) el.scrollTop = el.scrollHeight;
   }, [messages, busy, active, view]);
 
+  // Focus the input only when the tab becomes visible (tab click or panel opened), never on re-renders,
+  // and never while the user is typing in a field of the page itself.
   useEffect(() => {
-    if (active && current) inputRef.current?.focus();
-  }, [active, current]);
+    if (active && !isTypingInPage()) inputRef.current?.focus({ preventScroll: true });
+  }, [active]);
 
   useEffect(() => () => port.current?.disconnect(), []);
 
@@ -320,4 +322,11 @@ function HistoryList({ list, currentId, onOpen, onDelete }: HistoryProps) {
       )}
     </div>
   );
+}
+
+/** True when focus is in an editable element of the page (our UI lives in a shadow root, so it is never the page's activeElement). */
+function isTypingInPage() {
+  const el = document.activeElement as HTMLElement | null;
+  if (!el || el.tagName === 'FLOATING-DEVTOOLS') return false;
+  return el.isContentEditable || el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT';
 }
