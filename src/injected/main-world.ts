@@ -225,6 +225,26 @@ import {
     return { label: `${shortFile(url)}:${line}`, url: `${url}:${line}` };
   }
 
+  /** Error objects created by a request failure (fetch rejection, response.json() parse error) -> request id. */
+  const errorRequests = new WeakMap<object, string>();
+  const tagError = (err: unknown, id: string) => {
+    if (err && typeof err === 'object') errorRequests.set(err, id);
+  };
+
+  /** Request behind one of the logged values: the error itself, or its `cause` (errors re-thrown with context). */
+  function requestOf(args: unknown[]): string | undefined {
+    for (const a of args) {
+      if (!a || typeof a !== 'object') continue;
+      try {
+        const id = errorRequests.get(a) ?? errorRequests.get((a as { cause?: object }).cause ?? {});
+        if (id) return id;
+      } catch {
+        /* exotic object */
+      }
+    }
+    return undefined;
+  }
+
   function emitConsole(level: ConsoleLevel, args: unknown[], opts: { prefix?: string; withStack?: boolean; source?: ConsoleEntry['source'] } = {}) {
     const frames = callerFrames();
     emit({
@@ -237,6 +257,7 @@ import {
         prefix: opts.prefix,
         source: opts.source ?? sourceFromFrame(frames[0]),
         stack: opts.withStack ? frames.map((f) => f.trim()).join('\n') : undefined,
+        request: level === 'error' || level === 'warn' ? requestOf(args) : undefined,
       },
     });
   }
@@ -397,6 +418,26 @@ import {
     else awaitingTiming.set(url, [id]);
   };
 
+  /** Where the page started a request (used to relate it to errors thrown from the same code). */
+  const initiator = () =>
+    callerFrames()
+      .slice(0, 6)
+      .map((f) => f.trim())
+      .join('\n') || undefined;
+
+  // response.json() rejections (body is not JSON) are tagged with the request they came from.
+  const responseRequests = new WeakMap<Response, string>();
+  if (typeof Response !== 'undefined') {
+    const nativeJson = Response.prototype.json;
+    Response.prototype.json = function (this: Response) {
+      const promise = nativeJson.call(this) as Promise<unknown>;
+      const id = responseRequests.get(this);
+      // A side branch: the caller still gets (and must handle) the original promise.
+      if (id) promise.catch((err) => tagError(err, id));
+      return promise;
+    };
+  }
+
   // fetch
   const nativeFetch = window.fetch;
   if (typeof nativeFetch === 'function') {
@@ -419,6 +460,7 @@ import {
             startTime: Date.now(),
             requestHeaders,
             requestBody: describeBody(init?.body),
+            initiator: initiator(),
           },
         });
         trackTiming(url, id);
@@ -436,6 +478,7 @@ import {
       const promise = Reflect.apply(nativeFetch, window, args) as Promise<Response>;
       promise.then(
         (res) => {
+          responseRequests.set(res, id);
           const mimeType = res.headers.get('content-type') ?? undefined;
           emit({
             kind: 'net',
@@ -465,6 +508,7 @@ import {
             .catch((err) => emit({ kind: 'net', patch: { id, state: 'done', responseBodyNote: `Não foi possível ler o corpo: ${err}` } }));
         },
         (err) => {
+          tagError(err, id);
           emit({ kind: 'net', patch: { id, state: 'failed', error: String(err), duration: performance.now() - started } });
         },
       );
@@ -512,6 +556,7 @@ import {
             startTime: Date.now(),
             requestHeaders: { ...meta.headers },
             requestBody: describeBody(body),
+            initiator: initiator(),
           },
         });
         trackTiming(meta.url, meta.id);

@@ -1,6 +1,6 @@
 import type { RuleSet } from '../types';
 import { javascriptRule, scriptLoadRule } from './javascript';
-import { httpErrorRule, requestFailureRule, unexpectedResponseRule } from './network';
+import { failureBurstRule, httpErrorRule, requestFailureRule, unexpectedResponseRule } from './network';
 import { duplicateRequestRule, largeResourceRule, slowRequestRule } from './performance';
 import { storageRule } from './storage';
 
@@ -11,6 +11,6 @@ import { storageRule } from './storage';
 export function builtinRules(): RuleSet {
   return {
     log: [storageRule, javascriptRule],
-    request: [scriptLoadRule, httpErrorRule, requestFailureRule, unexpectedResponseRule, slowRequestRule, largeResourceRule, duplicateRequestRule()],
+    request: [scriptLoadRule, httpErrorRule, requestFailureRule, failureBurstRule(), unexpectedResponseRule, slowRequestRule, largeResourceRule, duplicateRequestRule()],
   };
 }

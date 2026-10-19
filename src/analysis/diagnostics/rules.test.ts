@@ -177,3 +177,25 @@ describe('performance rules', () => {
     expect(rule.evaluate(r, ctx)).toBeNull();
   });
 });
+
+describe('failure burst rule', () => {
+  it('reports several failures to the same host in a short window', async () => {
+    const { failureBurstRule } = await import('./rules/network');
+    const rule = failureBurstRule();
+    expect(rule.evaluate(req({ status: 500, startTime: 0 }), ctx)).toBeNull();
+    expect(rule.evaluate(req({ state: 'failed', status: 0, error: 'TypeError: Failed to fetch', startTime: 1000, url: 'https://app.test/api/other' }), ctx)).toBeNull();
+    const f = rule.evaluate(req({ status: 503, startTime: 2000 }), ctx)!;
+    expect(f).toMatchObject({ ruleId: 'net.failure-burst', subject: 'app.test', severity: 'high' });
+    expect(f.related).toHaveLength(2);
+  });
+
+  it('ignores cancellations, 4xx and failures far apart', async () => {
+    const { failureBurstRule } = await import('./rules/network');
+    const rule = failureBurstRule();
+    rule.evaluate(req({ state: 'failed', status: 0, error: 'AbortError', startTime: 0 }), ctx);
+    rule.evaluate(req({ status: 404, startTime: 0 }), ctx);
+    rule.evaluate(req({ status: 500, startTime: 0 }), ctx);
+    rule.evaluate(req({ status: 500, startTime: 20_000 }), ctx);
+    expect(rule.evaluate(req({ status: 500, startTime: 40_000 }), ctx)).toBeNull();
+  });
+});

@@ -1,7 +1,7 @@
 import type { NetworkEntry } from '../../../shared/types';
 import { normalizeUrl } from '../../fingerprint';
 import { originOfUrl } from '../../url';
-import { downgrade, type Finding, type RequestRule, type Severity } from '../types';
+import { downgrade, type EventRef, type Finding, type RequestRule, type Severity } from '../types';
 import { compact, describe, hostOf, isApi, isThirdParty } from './util';
 
 const subjectOf = (r: NetworkEntry, extra: string | number) => `${r.method} ${normalizeUrl(r.url)} ${extra}`;
@@ -241,3 +241,57 @@ export const unexpectedResponseRule: RequestRule = {
     return null;
   },
 };
+
+const BURST_WINDOW_MS = 10_000;
+const BURST_MIN = 3;
+
+/**
+ * Several failures (network errors or 5xx) to the same host in a short window: usually one
+ * shared cause (service down, auth expired) rather than independent bugs. Stateful.
+ */
+export function failureBurstRule(): RequestRule {
+  const failures = new Map<string, { id: string; end: number }[]>();
+  const counted = new Set<string>();
+  return {
+    id: 'net.failure-burst',
+    evaluate(r, ctx): Finding | null {
+      if (r.state === 'pending' || !(r.state === 'failed' || r.status >= 500) || /abort|cancel|ERR_ABORTED|BLOCKED_BY_CLIENT/i.test(r.error ?? '')) return null;
+      const host = hostOf(r.url);
+      if (!host) return null;
+      const end = r.startTime + (r.duration ?? 0);
+      let list = failures.get(host);
+      if (!list) {
+        list = [];
+        failures.set(host, list);
+        if (failures.size > 200) failures.delete(failures.keys().next().value!);
+      }
+      if (!counted.has(r.id)) {
+        counted.add(r.id);
+        list.push({ id: r.id, end });
+        if (list.length > 50) list.shift();
+      }
+      const burst = list.filter((x) => Math.abs(end - x.end) <= BURST_WINDOW_MS);
+      if (burst.length < BURST_MIN) return null;
+      const thirdParty = isThirdParty(originOfUrl(r.url), ctx.pageOrigin);
+      const related: EventRef[] = burst.filter((x) => x.id !== r.id).map((x) => ({ kind: 'request', id: x.id }));
+      return {
+        ruleId: 'net.failure-burst',
+        subject: host,
+        category: 'network',
+        severity: thirdParty ? 'medium' : 'high',
+        title: `Falhas em série em ${host}`,
+        description: `${burst.length} requisições para o mesmo host falharam em até ${BURST_WINDOW_MS / 1000} s.`,
+        evidence: [`${burst.length} falhas (erro de rede ou HTTP 5xx) para ${host} dentro de ${BURST_WINDOW_MS / 1000} s; a mais recente: ${describe(r)}.`],
+        causes: [
+          'Uma causa comum às chamadas: serviço fora do ar ou sobrecarregado, sessão expirada, ou problema de rede/DNS para este host.',
+          'Também pode ser coincidência de falhas independentes: confira se as rotas e os erros são os mesmos.',
+        ],
+        impact: 'Tudo o que depende deste host tende a falhar ao mesmo tempo.',
+        recommendations: ['Comece pela falha mais antiga da série.', 'Verifique o status do serviço e se a interface degrada bem (retry com backoff, mensagens de indisponibilidade).'],
+        event: { kind: 'request', id: r.id },
+        time: r.startTime,
+        related,
+      };
+    },
+  };
+}

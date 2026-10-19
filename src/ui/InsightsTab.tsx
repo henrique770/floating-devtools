@@ -1,11 +1,12 @@
 import { memo, useCallback, useMemo, useState } from 'react';
+import { relatedLogs, relatedRequests, type Correlation } from '../analysis/correlate';
 import { CATEGORIES, SEVERITIES, severityRank, type Category, type Diagnostic, type EventRef, type Severity } from '../analysis/diagnostics/types';
 import { redactText } from '../analysis/redact';
 import type { DevtoolsStore, Snapshot } from '../content/store';
 import type { ConsoleEntry, NetworkEntry } from '../shared/types';
-import { formatClock, formatMs, isErrorEntry, nameOf, statusLabel } from './format';
+import { CorrelationList, logLabel, requestLabel, type EventLabel } from './Correlations';
+import { formatClock, formatMs, isErrorEntry } from './format';
 import { IconAssistant, IconChevron } from './Icons';
-import { preview } from './ValueView';
 
 export const SEVERITY_LABEL: Record<Severity, string> = { high: 'Alta', medium: 'Média', low: 'Baixa', info: 'Info' };
 export const CATEGORY_LABEL: Record<Category, string> = { javascript: 'JavaScript', network: 'Network', storage: 'Storage', performance: 'Performance' };
@@ -25,12 +26,16 @@ const SORTERS: Record<Sort, (a: Diagnostic, b: Diagnostic) => number> = {
 /** Diagnostics counted in the tab badge: not dismissed, not informational. */
 export const notableDiagnostics = (snap: Snapshot) => snap.diagnostics.filter((d) => d.severity !== 'info' && !snap.dismissed.has(d.id));
 
-interface Related {
+interface Related extends EventLabel {
   ref: EventRef;
-  label: string;
-  /** False once the event left the capture buffer (or was cleared). */
-  available: boolean;
-  error?: boolean;
+}
+
+/** What an expanded diagnostic shows besides its own text (computed only while expanded). */
+interface Details {
+  related: Related[];
+  /** Events of the other kind possibly linked to the latest occurrence (requests for a log, logs for a request). */
+  correlations: Correlation[];
+  label: (ref: EventRef) => EventLabel;
 }
 
 interface Props {
@@ -88,20 +93,19 @@ export function InsightsTab({ store, snap, slowMs, onNavigate, onAskAi }: Props)
     };
   }, [anyOpen, snap.requests, snap.logs]);
 
-  const relatedOf = (d: Diagnostic): Related[] | undefined => {
+  const detailsOf = (d: Diagnostic): Details | undefined => {
     if (!lookup || !open.has(d.id)) return undefined;
-    return d.related.slice(0, 12).map((ref) => {
-      if (ref.kind === 'request') {
-        const r = lookup.requests.get(ref.id);
-        return r
-          ? { ref, label: `${r.method} ${nameOf(r.url)} → ${statusLabel(r)}${r.duration !== undefined ? ` · ${formatMs(r.duration)}` : ''}`, available: true, error: isErrorEntry(r) }
-          : { ref, label: 'Requisição fora do buffer', available: false };
-      }
-      const l = lookup.logs.get(ref.id);
-      return l
-        ? { ref, label: `${formatClock(l.time)} ${l.prefix ? `${l.prefix} ` : ''}${l.args.map((a) => preview(a)).join(' ')}`.slice(0, 140), available: true, error: l.level === 'error' }
-        : { ref, label: 'Mensagem fora do buffer', available: false };
-    });
+    const label = (ref: EventRef) => (ref.kind === 'request' ? requestLabel(lookup.requests.get(ref.id)) : logLabel(lookup.logs.get(ref.id)));
+    const latest = d.related[0];
+    let correlations: Correlation[] = [];
+    if (latest?.kind === 'log') {
+      const l = lookup.logs.get(latest.id);
+      if (l) correlations = relatedRequests(l, snap.requests, location.origin);
+    } else if (latest?.kind === 'request') {
+      const r = lookup.requests.get(latest.id);
+      if (r) correlations = relatedLogs(r, snap.logs, location.origin);
+    }
+    return { related: d.related.slice(0, 12).map((ref) => ({ ref, ...label(ref) })), correlations, label };
   };
 
   const toggle = useCallback(
@@ -168,7 +172,7 @@ export function InsightsTab({ store, snap, slowMs, onNavigate, onAskAi }: Props)
               diagnostic={d}
               dismissed={dismissed.has(d.id)}
               open={open.has(d.id)}
-              related={relatedOf(d)}
+              details={detailsOf(d)}
               onToggle={toggle}
               onDismiss={dismiss}
               onNavigate={onNavigate}
@@ -242,14 +246,14 @@ interface ItemProps {
   diagnostic: Diagnostic;
   dismissed: boolean;
   open: boolean;
-  related?: Related[];
+  details?: Details;
   onToggle: (id: string) => void;
   onDismiss: (id: string, value: boolean) => void;
   onNavigate: (ref: EventRef) => void;
   onAsk: (d: Diagnostic) => void;
 }
 
-const DiagnosticItem = memo(function DiagnosticItem({ diagnostic: d, dismissed, open, related, onToggle, onDismiss, onNavigate, onAsk }: ItemProps) {
+const DiagnosticItem = memo(function DiagnosticItem({ diagnostic: d, dismissed, open, details, onToggle, onDismiss, onNavigate, onAsk }: ItemProps) {
   return (
     <div className={`ins-item${open ? ' is-open' : ''}${dismissed ? ' is-dismissed' : ''}`}>
       <button type="button" className="ins-head" aria-expanded={open} onClick={() => onToggle(d.id)}>
@@ -273,13 +277,14 @@ const DiagnosticItem = memo(function DiagnosticItem({ diagnostic: d, dismissed, 
           <h4>Impacto potencial</h4>
           <p>{d.impact}</p>
           <Block title="Recomendações" items={d.recommendations} />
-          {related && related.length > 0 && (
+          {details && details.related.length > 0 && (
             <>
               <h4>
-                Eventos relacionados <span className="ins-hint">{d.related.length > related.length ? `${related.length} de ${d.related.length}` : related.length}</span>
+                Eventos relacionados{' '}
+                <span className="ins-hint">{d.related.length > details.related.length ? `${details.related.length} de ${d.related.length}` : details.related.length}</span>
               </h4>
               <ul className="ins-related">
-                {related.map((r) => (
+                {details.related.map((r) => (
                   <li key={`${r.ref.kind}:${r.ref.id}`}>
                     <button
                       type="button"
@@ -289,11 +294,20 @@ const DiagnosticItem = memo(function DiagnosticItem({ diagnostic: d, dismissed, 
                       title={r.available ? `Abrir na aba ${r.ref.kind === 'request' ? 'Network' : 'Console'}` : 'O evento não está mais retido'}
                     >
                       <span className="ins-related-kind">{r.ref.kind === 'request' ? 'NET' : 'LOG'}</span>
-                      <span className="ellipsis">{r.label}</span>
+                      <span className="ellipsis">{r.text}</span>
                     </button>
                   </li>
                 ))}
               </ul>
+            </>
+          )}
+          {details && (
+            <>
+              <h4>
+                {d.related[0]?.kind === 'log' ? 'Requisições possivelmente relacionadas' : 'Logs possivelmente relacionados'}{' '}
+                <span className="ins-hint">à ocorrência mais recente, com o grau de confiança</span>
+              </h4>
+              <CorrelationList items={details.correlations} label={details.label} onOpen={onNavigate} />
             </>
           )}
           <p className="ins-meta">

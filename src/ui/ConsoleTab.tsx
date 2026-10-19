@@ -1,8 +1,11 @@
-import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { createContext, memo, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { relatedRequests, type Correlation } from '../analysis/correlate';
+import type { EventRef } from '../analysis/diagnostics/types';
 import type { LogGroup } from '../analysis/groups';
 import { originOf } from '../analysis/origin';
 import type { DevtoolsStore } from '../content/store';
-import type { ConsoleEntry, ConsoleLevel, SerializedValue } from '../shared/types';
+import type { ConsoleEntry, ConsoleLevel, NetworkEntry, SerializedValue } from '../shared/types';
+import { CorrelationList, requestLabel, type EventLabel } from './Correlations';
 import { formatClock } from './format';
 import { IconChevron, IconClear } from './Icons';
 import { usePersistentState } from './usePersistentState';
@@ -30,6 +33,14 @@ const PERIODS = [
   { key: '15m', label: 'Últimos 15 min', ms: 15 * 60_000 },
 ];
 
+/** Lets message rows look up related requests on demand without re-rendering when requests change. */
+interface Relations {
+  find: (entry: ConsoleEntry) => Correlation[];
+  label: (ref: EventRef) => EventLabel;
+  open: (ref: EventRef) => void;
+}
+const RelationsContext = createContext<Relations | null>(null);
+
 /** Occurrences listed when a group is expanded (the most recent ones). */
 const MAX_MEMBERS = 200;
 
@@ -49,12 +60,14 @@ interface Props {
   store: DevtoolsStore;
   logs: ConsoleEntry[];
   groups: LogGroup[];
+  requests: NetworkEntry[];
   active: boolean;
+  onNavigate: (ref: EventRef) => void;
   /** Entry to reveal (navigation from Insights); the nonce makes repeated clicks re-trigger. */
   focus?: { id: string; nonce: number };
 }
 
-export function ConsoleTab({ store, logs, groups, active, focus }: Props) {
+export function ConsoleTab({ store, logs, groups, requests, active, focus, onNavigate }: Props) {
   const [query, setQuery] = useState('');
   const [level, setLevel] = useState('all');
   const [origin, setOrigin] = useState('all');
@@ -64,6 +77,19 @@ export function ConsoleTab({ store, logs, groups, active, focus }: Props) {
   const [openGroups, setOpenGroups] = useState<ReadonlySet<string>>(() => new Set());
   const listRef = useRef<HTMLDivElement>(null);
   const stickToBottom = useRef(true);
+
+  const requestsRef = useRef(requests);
+  requestsRef.current = requests;
+  const navigateRef = useRef(onNavigate);
+  navigateRef.current = onNavigate;
+  const relations = useMemo<Relations>(
+    () => ({
+      find: (entry) => relatedRequests(entry, requestsRef.current, location.origin),
+      label: (ref) => requestLabel(requestsRef.current.find((r) => r.id === ref.id)),
+      open: (ref) => navigateRef.current(ref),
+    }),
+    [],
+  );
 
   const periodMs = (PERIODS.find((p) => p.key === period) ?? PERIODS[0]).ms;
   const now = useNow(active && periodMs > 0);
@@ -187,25 +213,27 @@ export function ConsoleTab({ store, logs, groups, active, focus }: Props) {
           </select>
         </span>
       </div>
-      <div
-        className="con-list"
-        ref={listRef}
-        onScroll={(e) => {
-          const el = e.currentTarget;
-          stickToBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 24;
-        }}
-      >
-        {grouped
-          ? visibleGroups.map((g) =>
-              g.count > 1 ? (
-                <GroupRow key={g.key} group={g} showTime={showTime} open={openGroups.has(g.key)} members={members.get(g.key)} onToggle={toggleGroup} />
-              ) : (
-                <Message key={g.key} entry={g.sample} showTime={showTime} />
-              ),
-            )
-          : visible.map((e) => <Message key={e.id} entry={e} showTime={showTime} />)}
-        {!shown && <div className="empty">{logs.length ? 'Nenhuma mensagem corresponde ao filtro.' : 'Nenhuma mensagem ainda.'}</div>}
-      </div>
+      <RelationsContext.Provider value={relations}>
+        <div
+          className="con-list"
+          ref={listRef}
+          onScroll={(e) => {
+            const el = e.currentTarget;
+            stickToBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 24;
+          }}
+        >
+          {grouped
+            ? visibleGroups.map((g) =>
+                g.count > 1 ? (
+                  <GroupRow key={g.key} group={g} showTime={showTime} open={openGroups.has(g.key)} members={members.get(g.key)} onToggle={toggleGroup} />
+                ) : (
+                  <Message key={g.key} entry={g.sample} showTime={showTime} />
+                ),
+              )
+            : visible.map((e) => <Message key={e.id} entry={e} showTime={showTime} />)}
+          {!shown && <div className="empty">{logs.length ? 'Nenhuma mensagem corresponde ao filtro.' : 'Nenhuma mensagem ainda.'}</div>}
+        </div>
+      </RelationsContext.Provider>
       <Prompt onRun={(code) => {
         stickToBottom.current = true;
         store.evaluate(code);
@@ -256,6 +284,9 @@ interface MessageProps {
 
 const Message = memo(function Message({ entry: e, showTime, group }: MessageProps) {
   const [stackOpen, setStackOpen] = useState(false);
+  const [relatedOpen, setRelatedOpen] = useState(false);
+  const relations = useContext(RelationsContext);
+  const canRelate = !!relations && (e.level === 'error' || e.level === 'warn');
   const icon = e.level === 'error' ? '✕' : e.level === 'warn' ? '⚠' : e.level === 'command' ? '›' : e.level === 'result' ? '‹' : '';
   const count = e.count && e.count > 1 ? e.count : 0;
   return (
@@ -285,7 +316,31 @@ const Message = memo(function Message({ entry: e, showTime, group }: MessageProp
         {e.prefix && <span className="msg-prefix">{e.prefix} </span>}
         {e.level === 'command' ? <span className="v-text">{(e.args[0] as { v: string }).v}</span> : formatArgs(e.args)}
         {stackOpen && e.stack && <pre className="v-stack">{e.stack}</pre>}
+        {relatedOpen && relations && <RelatedRequests entry={e} relations={relations} />}
       </div>
+      {canRelate && (
+        <span className="msg-actions">
+          {e.request && (
+            <button
+              type="button"
+              className="msg-rel is-exact"
+              onClick={() => relations!.open({ kind: 'request', id: e.request! })}
+              title={`Este erro veio da requisição ${relations!.label({ kind: 'request', id: e.request }).text} — abrir na aba Network`}
+            >
+              NET ↗
+            </button>
+          )}
+          <button
+            type="button"
+            className={`msg-rel${relatedOpen ? ' is-active' : ''}`}
+            aria-expanded={relatedOpen}
+            onClick={() => setRelatedOpen(!relatedOpen)}
+            title="Requisições possivelmente relacionadas"
+          >
+            ⇄
+          </button>
+        </span>
+      )}
       {e.source && (
         <span className="msg-source" title={e.source.url}>
           {e.source.label}
@@ -294,6 +349,17 @@ const Message = memo(function Message({ entry: e, showTime, group }: MessageProp
     </div>
   );
 });
+
+/** Computed once when opened: correlation is on demand, never per captured event. */
+function RelatedRequests({ entry, relations }: { entry: ConsoleEntry; relations: Relations }) {
+  const items = useMemo(() => relations.find(entry), [entry, relations]);
+  return (
+    <div className="msg-related">
+      <span className="msg-related-title">Requisições possivelmente relacionadas</span>
+      <CorrelationList items={items} label={relations.label} onOpen={relations.open} empty="Nenhuma requisição relacionada: sem vínculo de objeto, de stack ou falha logo antes." />
+    </div>
+  );
+}
 
 const ALLOWED_CSS = new Set([
   'color',

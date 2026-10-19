@@ -1,6 +1,9 @@
 import { Fragment, memo, useEffect, useMemo, useRef, useState } from 'react';
+import { relatedLogs } from '../analysis/correlate';
+import type { EventRef } from '../analysis/diagnostics/types';
 import type { DevtoolsStore } from '../content/store';
-import type { NetworkEntry } from '../shared/types';
+import type { ConsoleEntry, NetworkEntry } from '../shared/types';
+import { CorrelationList, logLabel } from './Correlations';
 import {
   copyText,
   formatBytes,
@@ -45,9 +48,11 @@ interface Props {
   width: number;
   /** Request to reveal (navigation from Insights); the nonce makes repeated clicks re-trigger. */
   focus?: { id: string; nonce: number };
+  logs: ConsoleEntry[];
+  onNavigate: (ref: EventRef) => void;
 }
 
-export function NetworkTab({ store, requests, recording, width, focus }: Props) {
+export function NetworkTab({ store, requests, recording, width, focus, logs, onNavigate }: Props) {
   const [query, setQuery] = useState('');
   const [typeFilter, setTypeFilter] = useState('all');
   const [errorsOnly, setErrorsOnly] = useState(false);
@@ -169,7 +174,7 @@ export function NetworkTab({ store, requests, recording, width, focus }: Props) 
             </div>
           </div>
         )}
-        {selected && <Details entry={selected} narrow={narrow} onClose={() => setSelectedId(null)} />}
+        {selected && <Details entry={selected} narrow={narrow} logs={logs} onNavigate={onNavigate} onClose={() => setSelectedId(null)} />}
       </div>
 
       <footer className="statusbar">
@@ -222,9 +227,17 @@ const Row = memo(function Row({
 
 // ------------------------------------------------------------------ details
 
-type DetailTab = 'headers' | 'payload' | 'preview' | 'response' | 'timing';
+type DetailTab = 'headers' | 'payload' | 'preview' | 'response' | 'timing' | 'related';
 
-function Details({ entry, narrow, onClose }: { entry: NetworkEntry; narrow: boolean; onClose: () => void }) {
+interface DetailsProps {
+  entry: NetworkEntry;
+  narrow: boolean;
+  logs: ConsoleEntry[];
+  onNavigate: (ref: EventRef) => void;
+  onClose: () => void;
+}
+
+function Details({ entry, narrow, logs, onNavigate, onClose }: DetailsProps) {
   const [tab, setTab] = useState<DetailTab>('headers');
   const json = useMemo(() => tryParseJson(entry.responseBody), [entry.responseBody]);
   const hasPayload = !!entry.requestBody || entry.url.includes('?');
@@ -234,6 +247,7 @@ function Details({ entry, narrow, onClose }: { entry: NetworkEntry; narrow: bool
     { key: 'preview', label: 'Preview', show: entry.type === 'image' || json !== undefined },
     { key: 'response', label: 'Response', show: true },
     { key: 'timing', label: 'Timing', show: true },
+    { key: 'related', label: 'Relacionados', show: true },
   ];
   const current = tabs.find((t) => t.key === tab && t.show) ? tab : 'headers';
 
@@ -266,6 +280,7 @@ function Details({ entry, narrow, onClose }: { entry: NetworkEntry; narrow: bool
           ))}
         {current === 'response' && <ResponseView entry={entry} json={json} />}
         {current === 'timing' && <TimingView entry={entry} />}
+        {current === 'related' && <RelatedView entry={entry} logs={logs} onNavigate={onNavigate} />}
       </div>
     </div>
   );
@@ -331,6 +346,11 @@ function HeadersView({ entry: e }: { entry: NetworkEntry }) {
       <Section title="General" actions={<CopyButton text={toCurl(e)} label="Copiar como cURL" />}>
         <KeyValues data={general} />
       </Section>
+      {e.initiator && (
+        <Section title="Iniciador">
+          <pre className="code-block initiator">{e.initiator}</pre>
+        </Section>
+      )}
       <Section title="Response Headers">
         {e.responseHeaders ? (
           <KeyValues data={Object.entries(e.responseHeaders)} />
@@ -417,6 +437,26 @@ function ResponseView({ entry: e, json }: { entry: NetworkEntry; json: unknown }
         <CopyButton text={e.responseBody} label="Copiar resposta" />
       </div>
       <pre className="code-block">{text}</pre>
+    </div>
+  );
+}
+
+/** Console errors/warnings possibly related to this request, computed when the tab is opened. */
+function RelatedView({ entry, logs, onNavigate }: { entry: NetworkEntry; logs: ConsoleEntry[]; onNavigate: (ref: EventRef) => void }) {
+  const items = useMemo(() => relatedLogs(entry, logs, location.origin), [entry, logs]);
+  const byId = useMemo(() => new Map(logs.map((l) => [l.id, l])), [logs]);
+  return (
+    <div className="pad">
+      <CorrelationList
+        items={items}
+        label={(ref) => logLabel(byId.get(ref.id))}
+        onOpen={onNavigate}
+        empty="Nenhum erro ou aviso do console relacionado a esta requisição."
+      />
+      <p className="muted corr-note">
+        Alta: o erro é o mesmo objeto gerado por esta requisição. Média: stack em comum com o iniciador, ou erro de JSON logo após uma resposta que não
+        é JSON. Baixa: só proximidade no tempo, o que não comprova relação.
+      </p>
     </div>
   );
 }

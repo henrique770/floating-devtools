@@ -44,6 +44,17 @@ Abra `chrome://extensions` (ou `brave://extensions`), ative o **Modo do desenvol
   3 primeiros frames do stack (sem query string nem hash de bundle). O local do erro faz parte da chave: a mesma
   mensagem lançada de lugares diferentes fica em grupos separados. Com filtro de período, aparecem os grupos com
   atividade no período, mas o contador mostra o total desde a última limpeza.
+- **Correlação Console ↔ Network**: em erros e avisos do Console, **⇄** lista as requisições possivelmente
+  relacionadas; nos detalhes de uma requisição, a aba **Relacionados** faz o inverso; no Insights, cada diagnóstico
+  expandido mostra as relações da ocorrência mais recente, e o Assistant recebe um resumo delas. Cada relação tem um
+  grau de confiança e o motivo:
+  - **Alta** — identidade de objeto: o erro registrado é o mesmo objeto produzido pela falha do `fetch()` ou de
+    `response.json()` (também quando chega como `cause` de outro erro). Quando existe, o erro ganha o atalho **NET ↗**.
+  - **Média** — o stack do erro e o ponto que iniciou a requisição passam pela mesma função do código da página
+    (frames de bibliotecas são ignorados), ou um erro de JSON ocorre logo após uma resposta que não é JSON.
+  - **Baixa** — só proximidade no tempo (falha até 2 s antes do erro). Mostrada como pista, nunca como causa.
+  Os detalhes de fetch/XHR mostram também o **Iniciador** (stack de quem chamou). O Insights agrupa ainda
+  **falhas em série** (3+ erros de rede ou 5xx no mesmo host em 10 s), um sinal de causa comum.
 - **Insights**: diagnósticos automáticos gerados localmente (sem IA) a partir do que foi capturado — painel com
   totais (requisições, erros, avisos, diagnósticos, lentas) e distribuição por severidade, e a lista de problemas com
   evidências, possíveis causas, impacto, recomendações e eventos relacionados (clique para abrir a requisição ou o log
@@ -81,10 +92,10 @@ Abra `chrome://extensions` (ou `brave://extensions`), ative o **Modo do desenvol
 
 | Parte | Arquivo | Papel |
 | --- | --- | --- |
-| Hook na página (MAIN world, `document_start`) | `src/injected/main-world.ts` | intercepta `console.*`, erros, `fetch`, `XHR` e usa `PerformanceObserver` para os demais recursos |
+| Hook na página (MAIN world, `document_start`) | `src/injected/main-world.ts` | intercepta `console.*`, erros, `fetch`, `XHR` (com o stack de quem iniciou) e usa `PerformanceObserver` para os demais recursos; marca os objetos de erro gerados por uma requisição para correlação |
 | Service worker | `src/background.ts` | `chrome.webRequest` completa status, headers, IP e cache de recursos estáticos; ícone e atalho; chamadas ao provider de IA (streaming) |
 | Content script | `src/content/` | store com atualização em lote e UI em React dentro de Shadow DOM (o CSS do site não interfere) |
-| Análise | `src/analysis/` | lógica pura e testável (sem `chrome.*`): fingerprint e agrupamento incremental de logs, e o motor de diagnósticos (`diagnostics/`), avaliado evento a evento |
+| Análise | `src/analysis/` | lógica pura e testável (sem `chrome.*`): fingerprint e agrupamento incremental de logs, motor de diagnósticos (`diagnostics/`, avaliado evento a evento), correlação sob demanda (`correlate.ts`) e mascaramento (`redact.ts`) |
 | UI | `src/ui/` | botão, painel, abas |
 
 Para criar uma regra de diagnóstico: implemente um `LogRule` ou `RequestRule` em `src/analysis/diagnostics/rules/`
@@ -95,6 +106,8 @@ Para criar uma regra de diagnóstico: implemente um `LogRule` ou `RequestRule` e
 
 - O corpo da resposta só é capturado para `fetch`/XHR (imagens, CSS, JS: use "Abrir em nova aba").
 - WebSocket, iframes e service workers não são capturados.
+- A correlação considera só o frame principal da aba; erros de axios e outras bibliotecas que criam um novo objeto de erro
+  não têm o vínculo por identidade (ficam com stack ou tempo).
 - O log não é preservado ao navegar/recarregar.
 - Sites com CSP sem `unsafe-eval` bloqueiam o prompt do console (a mensagem de erro indica isso).
 - Logs feitos antes da extensão carregar (abas abertas antes da instalação) não aparecem: recarregue a aba.

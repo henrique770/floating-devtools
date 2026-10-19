@@ -1,3 +1,4 @@
+import { CONFIDENCE_LABEL, relatedRequests } from '../analysis/correlate';
 import { redact, type Redaction } from '../analysis/redact';
 import { safeUrl } from '../analysis/url';
 import type { Snapshot } from '../content/store';
@@ -11,6 +12,7 @@ const MAX_ERRORS = 40;
 const MAX_FAILED = 40;
 const MAX_SLOW = 10;
 const BODY_SNIPPET = 400;
+const MAX_CORRELATED_ERRORS = 10;
 
 const clip = (s: string, n: number) => (s.length > n ? `${s.slice(0, n)}…` : s);
 
@@ -73,6 +75,21 @@ export function buildContext(snap: Snapshot): CapturedContext {
   const byType = new Map<string, number>();
   for (const r of requests) byType.set(r.type, (byType.get(r.type) ?? 0) + 1);
 
+  const byId = new Map(requests.map((q) => [q.id, q]));
+  const correlated = errors
+    .slice(-MAX_CORRELATED_ERRORS)
+    .map((e) => ({ e, links: relatedRequests(e, requests, location.origin).slice(0, 2) }))
+    .filter((x) => x.links.length)
+    .map(({ e, links }) =>
+      [
+        `- erro: ${clip(r(e.args.map((a) => preview(a)).join(' ')), 200)}`,
+        ...links.map((c) => {
+          const q = byId.get(c.ref.id)!;
+          return r(`    ← ${q.method} ${safeUrl(q.url)} → ${statusLabel(q)} (confiança ${CONFIDENCE_LABEL[c.confidence].toLowerCase()}: ${c.reason})`);
+        }),
+      ].join('\n'),
+    );
+
   const sections = [
     `Página: ${safeUrl(location.href)}`,
     `Título: ${clip(r(document.title), 120)}`,
@@ -94,6 +111,9 @@ export function buildContext(snap: Snapshot): CapturedContext {
     '',
     `## Requisições lentas (> 1 s)`,
     ...(slow.map(request).join('\n') || 'nenhuma').split('\n'),
+    '',
+    '## Relações entre erros e requisições (calculadas localmente; confiança baixa = só proximidade no tempo)',
+    ...(correlated.join('\n') || 'nenhuma').split('\n'),
     '',
     '## Últimas mensagens do console',
     ...(logs

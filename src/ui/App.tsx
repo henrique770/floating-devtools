@@ -475,10 +475,10 @@ const Panel = memo(function Panel({ hidden, store, snap, vp, button, size, onRes
           />
         )}
         <div className="fdt-tab-content" hidden={tab !== 'network'}>
-          <NetworkTab store={store} requests={snap.requests} recording={snap.recording} width={place.w} focus={netFocus} />
+          <NetworkTab store={store} requests={snap.requests} recording={snap.recording} width={place.w} focus={netFocus} logs={snap.logs} onNavigate={navigate} />
         </div>
         <div className="fdt-tab-content" hidden={tab !== 'console'}>
-          <ConsoleTab store={store} logs={snap.logs} groups={snap.groups} active={!hidden && tab === 'console'} focus={logFocus} />
+          <ConsoleTab store={store} logs={snap.logs} groups={snap.groups} requests={snap.requests} active={!hidden && tab === 'console'} focus={logFocus} onNavigate={navigate} />
         </div>
         <div className="fdt-tab-content" hidden={tab !== 'insights'}>
           <InsightsTab store={store} snap={snap} slowMs={insights.slowMs} onNavigate={navigate} onAskAi={askAi} />

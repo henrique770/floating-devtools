@@ -51,6 +51,8 @@ export interface NetworkEntry {
   timing?: Timing;
   /** Set once the background webRequest data has been merged in. */
   webMatched?: boolean;
+  /** Stack of the page code that called fetch()/xhr.send() (top frames, extension frames removed). */
+  initiator?: string;
   /**
    * What chrome.webRequest saw for a fetch/XHR. The page only gets "Failed to fetch"; this tells
    * whether the server actually answered (a hint of CORS) or the connection failed (net::ERR_*).
@@ -94,6 +96,11 @@ export interface ConsoleEntry {
   count?: number;
   /** Fingerprint of the entry's group (set by the store, see analysis/fingerprint). */
   group?: string;
+  /**
+   * Request whose failure produced the logged error object: the very same object that the
+   * fetch() rejection or response.json() parse error handed to the page (identity, not timing).
+   */
+  request?: string;
 }
 
 /** Page (MAIN world) -> UI */
