@@ -1,9 +1,11 @@
-import { Fragment, memo, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { relatedLogs } from '../analysis/correlate';
 import type { EventRef } from '../analysis/diagnostics/types';
 import type { DevtoolsStore } from '../content/store';
 import type { ConsoleEntry, NetworkEntry } from '../shared/types';
+import { CompareView } from './CompareView';
 import { CorrelationList, logLabel } from './Correlations';
+import { Section } from './Section';
 import {
   copyText,
   formatBytes,
@@ -12,6 +14,7 @@ import {
   hostOf,
   isErrorEntry,
   nameOf,
+  shortName,
   sizeLabel,
   statusLabel,
   toCurl,
@@ -58,6 +61,9 @@ export function NetworkTab({ store, requests, recording, width, focus, logs, onN
   const [errorsOnly, setErrorsOnly] = useState(false);
   const [sort, setSort] = useState<{ key: SortKey; dir: 1 | -1 }>({ key: 'start', dir: 1 });
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  // Comparison: pick A in the details ("Comparar"), then click B in the list.
+  const [compareBase, setCompareBase] = useState<string | null>(null);
+  const [compare, setCompare] = useState<{ a: string; b: string } | null>(null);
   const rowsRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -67,6 +73,8 @@ export function NetworkTab({ store, requests, recording, width, focus, logs, onN
     setTypeFilter('all');
     setErrorsOnly(false);
     setSelectedId(focus.id);
+    setCompare(null);
+    setCompareBase(null);
     requestAnimationFrame(() => rowsRef.current?.querySelector(`[data-id="${CSS.escape(focus.id)}"]`)?.scrollIntoView({ block: 'nearest' }));
   }, [focus]);
 
@@ -86,7 +94,32 @@ export function NetworkTab({ store, requests, recording, width, focus, logs, onN
     return list;
   }, [requests, query, typeFilter, errorsOnly, sort]);
 
-  const selected = selectedId ? requests.find((r) => r.id === selectedId) : undefined;
+  const compared = compare && { a: requests.find((r) => r.id === compare.a), b: requests.find((r) => r.id === compare.b) };
+  const comparing = compared?.a && compared.b ? { a: compared.a, b: compared.b } : undefined;
+  const selected = !comparing && selectedId ? requests.find((r) => r.id === selectedId) : undefined;
+  const base = compareBase ? requests.find((r) => r.id === compareBase) : undefined;
+  const panelOpen = !!(selected || comparing);
+
+  const onRowSelect = useCallback(
+    (id: string) => {
+      if (compare) {
+        if (id !== compare.a) setCompare({ ...compare, b: id });
+        return;
+      }
+      if (compareBase) {
+        if (id === compareBase) return;
+        setCompare({ a: compareBase, b: id });
+        setCompareBase(null);
+        return;
+      }
+      setSelectedId(id);
+    },
+    [compare, compareBase],
+  );
+  const startCompare = useCallback((id: string) => {
+    setCompareBase(id);
+    setSelectedId(null);
+  }, []);
   const narrow = width < 600;
 
   const totals = useMemo(() => {
@@ -117,7 +150,12 @@ export function NetworkTab({ store, requests, recording, width, focus, logs, onN
         >
           <IconRecord active={recording} />
         </button>
-        <button type="button" className="fdt-icon-btn" onClick={() => (store.clearNetwork(), setSelectedId(null))} title="Limpar">
+        <button type="button" className="fdt-icon-btn" onClick={() => {
+            store.clearNetwork();
+            setSelectedId(null);
+            setCompare(null);
+            setCompareBase(null);
+          }} title="Limpar">
           <IconClear />
         </button>
         <input
@@ -151,11 +189,21 @@ export function NetworkTab({ store, requests, recording, width, focus, logs, onN
         ))}
       </div>
 
-      <div className={`net-main${selected ? ' has-detail' : ''}${narrow ? ' is-narrow' : ''}`}>
-        {(!selected || !narrow) && (
+      {base && (
+        <div className="net-banner" role="status">
+          <span className="ellipsis">
+            Selecione outra requisição para comparar com <b>{base.method} {shortName(base.url)}</b>
+          </span>
+          <button type="button" className="link-btn" onClick={() => setCompareBase(null)}>
+            Cancelar
+          </button>
+        </div>
+      )}
+      <div className={`net-main${panelOpen ? ' has-detail' : ''}${narrow ? ' is-narrow' : ''}`}>
+        {(!panelOpen || !narrow) && (
           <div className="net-table" role="table">
             <div className="net-row net-head" role="row">
-              {(selected ? COLUMNS.slice(0, 1) : COLUMNS).map((c) => (
+              {(panelOpen ? COLUMNS.slice(0, 1) : COLUMNS).map((c) => (
                 <button type="button" key={c.key} className={`cell ${c.className}`} onClick={() => toggleSort(c.key)} role="columnheader">
                   {c.label}
                   {sort.key === c.key && <span className="sort">{sort.dir === 1 ? '▲' : '▼'}</span>}
@@ -164,7 +212,13 @@ export function NetworkTab({ store, requests, recording, width, focus, logs, onN
             </div>
             <div className="net-rows" ref={rowsRef}>
               {visible.map((r) => (
-                <Row key={r.id} entry={r} compact={!!selected} selected={r.id === selectedId} onSelect={setSelectedId} />
+                <Row
+                  key={r.id}
+                  entry={r}
+                  compact={panelOpen}
+                  selected={comparing ? r.id === comparing.a.id || r.id === comparing.b.id : r.id === (selected?.id ?? compareBase)}
+                  onSelect={onRowSelect}
+                />
               ))}
               {!visible.length && (
                 <div className="empty">
@@ -174,7 +228,22 @@ export function NetworkTab({ store, requests, recording, width, focus, logs, onN
             </div>
           </div>
         )}
-        {selected && <Details entry={selected} narrow={narrow} logs={logs} onNavigate={onNavigate} onClose={() => setSelectedId(null)} />}
+        {comparing && (
+          <CompareView
+            a={comparing.a}
+            b={comparing.b}
+            narrow={narrow}
+            onClose={() => setCompare(null)}
+            onSwap={() => setCompare({ a: comparing.b.id, b: comparing.a.id })}
+            onOpen={(id) => {
+              setCompare(null);
+              setSelectedId(id);
+            }}
+          />
+        )}
+        {selected && (
+          <Details entry={selected} narrow={narrow} logs={logs} onNavigate={onNavigate} onCompare={startCompare} onClose={() => setSelectedId(null)} />
+        )}
       </div>
 
       <footer className="statusbar">
@@ -234,10 +303,11 @@ interface DetailsProps {
   narrow: boolean;
   logs: ConsoleEntry[];
   onNavigate: (ref: EventRef) => void;
+  onCompare: (id: string) => void;
   onClose: () => void;
 }
 
-function Details({ entry, narrow, logs, onNavigate, onClose }: DetailsProps) {
+function Details({ entry, narrow, logs, onNavigate, onCompare, onClose }: DetailsProps) {
   const [tab, setTab] = useState<DetailTab>('headers');
   const json = useMemo(() => tryParseJson(entry.responseBody), [entry.responseBody]);
   const hasPayload = !!entry.requestBody || entry.url.includes('?');
@@ -264,6 +334,9 @@ function Details({ entry, narrow, logs, onNavigate, onClose }: DetailsProps) {
               {t.label}
             </button>
           ))}
+        <button type="button" className="link-btn detail-compare" onClick={() => onCompare(entry.id)} title="Comparar esta requisição com outra da lista">
+          ⇄ Comparar
+        </button>
       </div>
       <div className="detail-body">
         {current === 'headers' && <HeadersView entry={entry} />}
@@ -283,21 +356,6 @@ function Details({ entry, narrow, logs, onNavigate, onClose }: DetailsProps) {
         {current === 'related' && <RelatedView entry={entry} logs={logs} onNavigate={onNavigate} />}
       </div>
     </div>
-  );
-}
-
-function Section({ title, children, actions }: { title: string; children: React.ReactNode; actions?: React.ReactNode }) {
-  const [open, setOpen] = useState(true);
-  return (
-    <section className="section">
-      <div className="section-title">
-        <button type="button" onClick={() => setOpen(!open)}>
-          <span className="caret">{open ? '▾' : '▸'}</span> {title}
-        </button>
-        {actions}
-      </div>
-      {open && <div className="section-body">{children}</div>}
-    </section>
   );
 }
 

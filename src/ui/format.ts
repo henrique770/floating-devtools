@@ -30,6 +30,13 @@ export function nameOf(url: string): string {
   }
 }
 
+/** Like nameOf, but hides query values (`users?…`): for compact labels outside the request list. */
+export function shortName(url: string): string {
+  const name = nameOf(url);
+  const i = name.indexOf('?');
+  return i < 0 ? name : `${name.slice(0, i)}?…`;
+}
+
 export function hostOf(url: string): string {
   try {
     return new URL(url).host;

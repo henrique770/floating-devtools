@@ -1,12 +1,14 @@
 import { memo, useCallback, useMemo, useState } from 'react';
 import { relatedLogs, relatedRequests, type Correlation } from '../analysis/correlate';
-import { CATEGORIES, SEVERITIES, severityRank, type Category, type Diagnostic, type EventRef, type Severity } from '../analysis/diagnostics/types';
+import { CATEGORIES, SEVERITIES, severityRank, type Category, type Diagnostic, type EventRef, type InsightsConfig, type Severity } from '../analysis/diagnostics/types';
+import { summarize } from '../analysis/performance';
 import { redactText } from '../analysis/redact';
 import type { DevtoolsStore, Snapshot } from '../content/store';
 import type { ConsoleEntry, NetworkEntry } from '../shared/types';
 import { CorrelationList, logLabel, requestLabel, type EventLabel } from './Correlations';
 import { formatClock, formatMs, isErrorEntry } from './format';
 import { IconAssistant, IconChevron } from './Icons';
+import { PerformancePanel } from './PerformancePanel';
 
 export const SEVERITY_LABEL: Record<Severity, string> = { high: 'Alta', medium: 'Média', low: 'Baixa', info: 'Info' };
 export const CATEGORY_LABEL: Record<Category, string> = { javascript: 'JavaScript', network: 'Network', storage: 'Storage', performance: 'Performance' };
@@ -41,12 +43,13 @@ interface Details {
 interface Props {
   store: DevtoolsStore;
   snap: Snapshot;
-  slowMs: number;
+  limits: InsightsConfig;
   onNavigate: (ref: EventRef) => void;
   onAskAi: (text: string) => void;
 }
 
-export function InsightsTab({ store, snap, slowMs, onNavigate, onAskAi }: Props) {
+export function InsightsTab({ store, snap, limits, onNavigate, onAskAi }: Props) {
+  const { slowMs } = limits;
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState('all');
   const [severity, setSeverity] = useState('relevant');
@@ -60,15 +63,12 @@ export function InsightsTab({ store, snap, slowMs, onNavigate, onAskAi }: Props)
 
   const stats = useMemo(() => {
     let failed = 0;
-    let slow = 0;
-    for (const r of requests) {
-      if (isErrorEntry(r)) failed++;
-      if (r.state === 'done' && !r.fromCache && (r.duration ?? 0) >= slowMs) slow++;
-    }
+    for (const r of requests) if (isErrorEntry(r)) failed++;
+    const { slow } = summarize(requests, limits.slowMs, limits.largeBytes);
     const bySeverity: Record<Severity, number> = { high: 0, medium: 0, low: 0, info: 0 };
     for (const d of active) bySeverity[d.severity]++;
     return { failed, slow, bySeverity };
-  }, [requests, active, slowMs]);
+  }, [requests, active, limits.slowMs, limits.largeBytes]);
 
   const visible = useMemo(() => {
     const sev = (SEVERITY_FILTERS.find((f) => f.key === severity) ?? SEVERITY_FILTERS[0]).match;
@@ -154,6 +154,7 @@ export function InsightsTab({ store, snap, slowMs, onNavigate, onAskAi }: Props)
           <Stat label="Lentas" value={stats.slow} note={`> ${formatMs(slowMs)}`} />
         </div>
         <SeverityBar counts={stats.bySeverity} selected={severity} onSelect={setSeverity} />
+        <PerformancePanel requests={requests} limits={limits} onNavigate={onNavigate} />
 
         <div className="ins-list-head">
           <span>

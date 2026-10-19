@@ -30,6 +30,12 @@ const tag = (kind: RedactionKind) => `[REDACTED:${kind}]`;
 const SENSITIVE_NAME =
   '[\\w.-]*?(?:pass(?:word|wd|phrase)?|pwd|secret|token|api[_-]?key|apikey|access[_-]?key|private[_-]?key|authorization|auth|session[_-]?id|sessionid|sid|cookie|credentials?|signature|otp|cvv|cvc|ssn)';
 
+const SENSITIVE_FIELD = new RegExp(`^${SENSITIVE_NAME}$`, 'i');
+const SENSITIVE_HEADER = /^(?:cookie|set-cookie|authorization|proxy-authorization|x-csrf-token|x-xsrf-token)$/i;
+
+/** Whether a header, query parameter or JSON field name usually holds a secret. */
+export const isSensitiveName = (name: string) => SENSITIVE_HEADER.test(name) || SENSITIVE_FIELD.test(name);
+
 interface Pattern {
   kind: RedactionKind;
   re: RegExp;

@@ -35,6 +35,13 @@ Abra `chrome://extensions` (ou `brave://extensions`), ative o **Modo do desenvol
   IBM Plex Mono. Para adicionar outra: `npm i -D @fontsource/<nome>` e uma entrada em `src/ui/fonts.ts`.
 - **Network**: filtro por texto (`-texto` inverte) e por tipo, ordenação por coluna, detalhes com
   Headers / Payload / Preview / Response / Timing e "Copiar como cURL".
+  **⇄ Comparar** (nos detalhes) e depois um clique em outra requisição abre a comparação lado a lado: resumo (URL,
+  método, status, tipo, duração, TTFB, download e tamanhos, com a diferença em valor e %), query string, headers de
+  requisição e resposta, payload e corpo da resposta. JSON é comparado pela estrutura (campos adicionados, removidos e
+  modificados, com o caminho, ex.: `$.user.roles[1]`); outros textos linha a linha. Clicar em outra linha troca B;
+  **Inverter** troca A e B; os rótulos A/B abrem os detalhes originais. Valores sensíveis (cookies, `authorization`,
+  tokens, senhas…) aparecem mascarados até você marcar **Valores sensíveis**, e a comparação usa os valores reais.
+  Corpos acima de 300 kB são comparados só por igualdade e tamanho; respostas binárias ou não capturadas são indicadas.
 - **Console**: níveis, filtro por texto, origem (esta origem / terceiros) e período, objetos expansíveis,
   mensagens repetidas agrupadas, erros não tratados, e um prompt para executar JS na página (↑/↓ para o histórico).
   **Agrupar** junta mensagens equivalentes mesmo que não sejam consecutivas — `QuotaExceededError` 200× vira
@@ -73,6 +80,10 @@ Abra `chrome://extensions` (ou `brave://extensions`), ative o **Modo do desenvol
   - **Performance**: requisições lentas (duração total; TTFB e download aparecem separados quando há dados de timing),
     recursos pesados e chamadas idênticas repetidas na mesma janela ("potencialmente duplicadas" — polling e novas
     tentativas também repetem chamadas).
+  O painel **Performance de rede** traz os rankings das requisições **mais lentas** (barra com as fases reais:
+  fila/conexão, espera do servidor/TTFB e download — ou "sem fases" quando o navegador não expõe o timing) e dos
+  recursos **mais pesados** (bytes transferidos, ou tamanho do corpo quando veio do cache), a mediana das chamadas de
+  API e quantas passaram dos limites configurados (▲). Clique em uma linha para abrir a requisição.
   Problemas vindos de scripts/hosts de outra origem têm a severidade reduzida um nível. Ocorrências do mesmo problema
   (mesma regra e mesmo endpoint/grupo de log) são somadas em um diagnóstico.
 - **Assistant**: chat com IA que recebe como contexto um resumo do que foi capturado (erros e avisos do

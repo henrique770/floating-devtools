@@ -2508,3 +2508,364 @@ button.ai-context:focus-visible {
   padding: 0;
   color: var(--text-dim);
 }
+
+/* ---------------------------------------------------------------- request comparison */
+
+.net-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 5px 10px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-selected);
+  color: var(--text);
+  font-size: calc(var(--fs) * 0.9167);
+  flex: none;
+}
+
+.detail-compare {
+  margin-left: auto;
+  padding: 0 8px !important;
+  white-space: nowrap;
+}
+
+.cmp-bar {
+  gap: 8px;
+}
+
+.cmp-title {
+  font-weight: 600;
+  margin-right: auto;
+}
+
+.cmp-swap {
+  white-space: nowrap;
+}
+
+.cmp-sides {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  padding: 8px 10px 0;
+}
+
+.cmp-side {
+  display: flex !important;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding: 4px 8px !important;
+  border: 1px solid var(--border) !important;
+  border-radius: 6px !important;
+  background: var(--bg-elev) !important;
+  font-family: var(--mono);
+  font-size: calc(var(--fs) * 0.9167);
+  text-align: left;
+}
+
+.cmp-side:hover {
+  border-color: var(--border-strong) !important;
+}
+
+.cmp-side-label {
+  flex: none;
+  padding: 0 5px;
+  border-radius: 3px;
+  background: var(--bg-active);
+  font-weight: 700;
+}
+
+.cmp-side-status {
+  flex: none;
+  margin-left: auto;
+  color: var(--text-dim);
+}
+
+.cmp-hint {
+  margin: 6px 10px 4px;
+  font-size: calc(var(--fs) * 0.9167);
+}
+
+.cmp-table {
+  font-family: var(--mono);
+  font-size: calc(var(--fs) * 0.9167);
+}
+
+.cmp-row {
+  display: grid;
+  grid-template-columns: 14px minmax(90px, 0.8fr) minmax(0, 1fr) minmax(0, 1fr);
+  gap: 8px;
+  padding: 2px 4px;
+  border-radius: 3px;
+  user-select: text;
+}
+
+.cmp-row > span {
+  min-width: 0;
+  word-break: break-all;
+}
+
+.cmp-head {
+  color: var(--text-faint);
+  font-family: var(--sans);
+  font-weight: 600;
+}
+
+.cmp-key {
+  color: var(--text-dim);
+}
+
+.cmp-mark {
+  text-align: center;
+  font-weight: 700;
+}
+
+.cmp-row.is-changed {
+  background: var(--yellow-bg);
+}
+.cmp-row.is-changed .cmp-mark {
+  color: var(--yellow);
+}
+
+.cmp-row.is-removed {
+  background: var(--red-bg);
+}
+.cmp-row.is-removed .cmp-mark {
+  color: var(--red);
+}
+
+.cmp-row.is-added {
+  background: var(--green-bg);
+}
+.cmp-row.is-added .cmp-mark {
+  color: var(--green);
+}
+
+.cmp-row.is-same .cmp-mark {
+  color: var(--text-faint);
+}
+
+.cmp-hidden,
+.cmp-json-summary {
+  margin: 4px 0;
+  font-size: calc(var(--fs) * 0.9167);
+}
+
+.cmp-text {
+  padding: 4px 0;
+  white-space: pre-wrap;
+}
+
+.cmp-line {
+  padding: 0 6px;
+}
+
+.cmp-line-op {
+  display: inline-block;
+  width: 14px;
+  font-weight: 700;
+  user-select: none;
+}
+
+.cmp-line.is-add {
+  background: var(--green-bg);
+}
+.cmp-line.is-add .cmp-line-op {
+  color: var(--green);
+}
+
+.cmp-line.is-del {
+  background: var(--red-bg);
+}
+.cmp-line.is-del .cmp-line-op {
+  color: var(--red);
+}
+
+.cmp-line.is-skip {
+  color: var(--text-faint);
+  font-style: italic;
+}
+
+@media (max-width: 520px) {
+  .cmp-sides {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ---------------------------------------------------------------- insights: network performance */
+
+.ins-perf {
+  margin: 8px 8px 0;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-elev);
+}
+
+.ins-perf-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.ins-perf-head h3 {
+  margin: 0;
+  font-size: calc(var(--fs) * 0.9167);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-faint);
+}
+
+.ins-perf-summary {
+  margin: 6px 0 4px;
+  color: var(--text-dim);
+  font-size: calc(var(--fs) * 0.9167);
+}
+
+.ins-perf-summary .is-warn {
+  color: var(--yellow);
+}
+
+.perf-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 12px;
+  margin: 4px 0;
+  color: var(--text-dim);
+  font-size: calc(var(--fs) * 0.8333);
+}
+
+.perf-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.perf-swatch {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+}
+
+.ph-connection {
+  background: var(--t-connect);
+}
+.ph-ttfb {
+  background: var(--t-wait);
+}
+.ph-download {
+  background: var(--t-download);
+}
+.ph-total {
+  background: var(--text-faint);
+}
+.ph-size {
+  background: var(--accent);
+}
+
+.perf-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.perf-row {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1.1fr) minmax(60px, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 3px 4px !important;
+  border-radius: 4px !important;
+  text-align: left;
+}
+
+.perf-row:hover {
+  background: var(--bg-hover) !important;
+}
+
+.perf-row:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.perf-name {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  font-family: var(--mono);
+  font-size: calc(var(--fs) * 0.9167);
+  color: var(--text);
+}
+
+.perf-meta,
+.perf-sub {
+  color: var(--text-faint);
+  font-size: calc(var(--fs) * 0.8333);
+}
+
+.perf-track {
+  display: block;
+  height: 6px;
+}
+
+.perf-bar {
+  display: flex;
+  gap: 2px;
+  height: 100%;
+  min-width: 4px;
+}
+
+.perf-bar > span {
+  flex-basis: 0;
+  min-width: 2px;
+  border-radius: 2px;
+}
+
+.perf-bar > span:first-child {
+  border-top-left-radius: 3px;
+  border-bottom-left-radius: 3px;
+}
+
+.perf-bar > span:last-child {
+  border-top-right-radius: 3px;
+  border-bottom-right-radius: 3px;
+}
+
+.perf-value {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  min-width: 64px;
+  font-family: var(--mono);
+  font-size: calc(var(--fs) * 0.9167);
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.perf-value.is-over {
+  color: var(--yellow);
+}
+
+.perf-flag {
+  font-size: calc(var(--fs) * 0.75);
+}
+
+.perf-empty {
+  padding: 8px 0;
+}
+
+.perf-more {
+  margin-top: 4px;
+}
+
+.ins-perf-head {
+  flex-wrap: wrap;
+}
+
+.ins-perf-head .segmented button {
+  white-space: nowrap;
+}

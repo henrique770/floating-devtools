@@ -1,7 +1,7 @@
 import { CONFIDENCE_LABEL, type Correlation } from '../analysis/correlate';
 import type { EventRef } from '../analysis/diagnostics/types';
 import type { ConsoleEntry, NetworkEntry } from '../shared/types';
-import { formatClock, formatMs, isErrorEntry, nameOf, statusLabel } from './format';
+import { formatClock, formatMs, isErrorEntry, shortName, statusLabel } from './format';
 import { preview } from './ValueView';
 
 export interface EventLabel {
@@ -14,7 +14,7 @@ export interface EventLabel {
 export function requestLabel(r: NetworkEntry | undefined): EventLabel {
   if (!r) return { text: 'Requisição fora do buffer', available: false };
   return {
-    text: `${r.method} ${nameOf(r.url)} → ${statusLabel(r)}${r.duration !== undefined && r.state !== 'pending' ? ` · ${formatMs(r.duration)}` : ''}`,
+    text: `${r.method} ${shortName(r.url)} → ${statusLabel(r)}${r.duration !== undefined && r.state !== 'pending' ? ` · ${formatMs(r.duration)}` : ''}`,
     error: isErrorEntry(r),
     available: true,
   };

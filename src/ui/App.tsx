@@ -391,6 +391,19 @@ const Panel = memo(function Panel({ hidden, store, snap, vp, button, size, onRes
   const requestCount = snap.requests.length;
   const requestErrors = useMemo(() => snap.requests.filter(isErrorEntry).length, [snap.requests]);
   const notable = useMemo(() => notableDiagnostics(snap), [snap]);
+
+  // On narrow panels the tab bar scrolls: keep the active tab in view.
+  const tabsRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (hidden) return;
+    const bar = tabsRef.current;
+    const el = bar?.querySelector<HTMLElement>('[aria-selected="true"]');
+    if (!bar || !el) return;
+    const b = bar.getBoundingClientRect();
+    const r = el.getBoundingClientRect();
+    if (r.left < b.left) bar.scrollLeft -= b.left - r.left;
+    else if (r.right > b.right) bar.scrollLeft += r.right - b.right;
+  }, [tab, hidden, place.w]);
   const notableHigh = notable.some((d) => d.severity === 'high');
 
   return (
@@ -412,7 +425,7 @@ const Panel = memo(function Panel({ hidden, store, snap, vp, button, size, onRes
           }
         }}
       >
-        <div className="fdt-tabs" role="tablist">
+        <div className="fdt-tabs" role="tablist" ref={tabsRef}>
           <button type="button" role="tab" aria-selected={tab === 'network'} className="fdt-tab" onClick={() => onTab('network')}>
             Network
             {requestCount > 0 && <span className="fdt-count">{requestCount}</span>}
@@ -481,7 +494,7 @@ const Panel = memo(function Panel({ hidden, store, snap, vp, button, size, onRes
           <ConsoleTab store={store} logs={snap.logs} groups={snap.groups} requests={snap.requests} active={!hidden && tab === 'console'} focus={logFocus} onNavigate={navigate} />
         </div>
         <div className="fdt-tab-content" hidden={tab !== 'insights'}>
-          <InsightsTab store={store} snap={snap} slowMs={insights.slowMs} onNavigate={navigate} onAskAi={askAi} />
+          <InsightsTab store={store} snap={snap} limits={insights} onNavigate={navigate} onAskAi={askAi} />
         </div>
         <div className="fdt-tab-content" hidden={tab !== 'assistant'}>
           <AssistantTab store={store} snap={snap} active={!hidden && tab === 'assistant'} onOpenSettings={openProviderSettings} draft={aiDraft} />

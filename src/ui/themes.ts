@@ -278,6 +278,8 @@ export function themeVars(theme: Theme, translucent: boolean, opacity: number): 
     '--yellow': p.yellow,
     '--yellow-bg': rgba(p.yellow, 0.07),
     '--yellow-border': rgba(p.yellow, 0.2),
+    '--green': p.green,
+    '--green-bg': rgba(p.green, 0.1),
     '--v-string': p.string,
     '--v-number': p.number,
     '--v-key': p.key,
