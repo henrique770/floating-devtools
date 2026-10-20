@@ -9,8 +9,65 @@ import { CorrelationList, requestLabel, type EventLabel } from './Correlations';
 import { formatClock } from './format';
 import type { FocusTarget } from './focusContext';
 import { IconAssistant, IconChevron, IconClear } from './Icons';
+import { defineMessages } from '../i18n';
+import { useLocale } from './useLocale';
 import { usePersistentState } from './usePersistentState';
 import { preview, ValueView } from './ValueView';
+
+const m = defineMessages({
+  pt: {
+    origins: { all: 'Todas as origens', page: 'Esta origem', 'third-party': 'Terceiros' } as Record<string, string>,
+    periods: { all: 'Todo o período', '1m': 'Último minuto', '5m': 'Últimos 5 min', '15m': 'Últimos 15 min' } as Record<string, string>,
+    clear: 'Limpar console',
+    filter: 'Filtrar',
+    groupTitle: 'Agrupar mensagens equivalentes (mesma mensagem, origem e stack trace)',
+    group: 'Agrupar',
+    timeTitle: 'Mostrar horário',
+    time: 'Hora',
+    level: 'Nível',
+    origin: 'Origem',
+    period: 'Período',
+    noMatch: 'Nenhuma mensagem corresponde ao filtro.',
+    empty: 'Nenhuma mensagem ainda.',
+    span: (first: string, last: string) => `primeira ${first} · última ${last}`,
+    occurrences: (n: number) => `${n} ocorrências`,
+    leftBuffer: (n: number) => ` · ${n} mais antigas já saíram do buffer`,
+    showingRecent: (n: number) => ` · exibindo as ${n} entradas mais recentes`,
+    toggleTitle: (n: number, span: string, open: boolean) => `${n} ocorrências (${span}) — ${open ? 'recolher' : 'expandir'}`,
+    fromRequest: (req: string) => `Este erro veio da requisição ${req} — abrir na aba Network`,
+    aiTitle: 'Investigar com IA: abre o Assistant focado nesta mensagem e nas requisições relacionadas',
+    ai: 'Investigar com IA',
+    related: 'Requisições possivelmente relacionadas',
+    noRelated: 'Nenhuma requisição relacionada: sem vínculo de objeto, de stack ou falha logo antes.',
+    prompt: 'Executar JavaScript na página (Enter executa, Shift+Enter quebra linha)',
+  },
+  en: {
+    origins: { all: 'All origins', page: 'This origin', 'third-party': 'Third parties' },
+    periods: { all: 'Whole period', '1m': 'Last minute', '5m': 'Last 5 min', '15m': 'Last 15 min' },
+    clear: 'Clear console',
+    filter: 'Filter',
+    groupTitle: 'Group equivalent messages (same message, origin and stack trace)',
+    group: 'Group',
+    timeTitle: 'Show time',
+    time: 'Time',
+    level: 'Level',
+    origin: 'Origin',
+    period: 'Period',
+    noMatch: 'No message matches the filter.',
+    empty: 'No messages yet.',
+    span: (first, last) => `first ${first} · last ${last}`,
+    occurrences: (n) => `${n} occurrences`,
+    leftBuffer: (n) => ` · ${n} older ones already left the buffer`,
+    showingRecent: (n) => ` · showing the ${n} most recent entries`,
+    toggleTitle: (n, span, open) => `${n} occurrences (${span}) — ${open ? 'collapse' : 'expand'}`,
+    fromRequest: (req) => `This error came from the request ${req} — open in the Network tab`,
+    aiTitle: 'Investigate with AI: opens the Assistant focused on this message and its related requests',
+    ai: 'Investigate with AI',
+    related: 'Possibly related requests',
+    noRelated: 'No related request: no object link, shared stack or failure right before.',
+    prompt: 'Run JavaScript on the page (Enter runs, Shift+Enter adds a line)',
+  },
+});
 
 const LEVELS: { key: string; label: string; match: (l: ConsoleLevel) => boolean }[] = [
   { key: 'all', label: 'All', match: () => true },
@@ -21,17 +78,13 @@ const LEVELS: { key: string; label: string; match: (l: ConsoleLevel) => boolean 
   { key: 'debug', label: 'Verbose', match: (l) => l === 'debug' },
 ];
 
-const ORIGINS = [
-  { key: 'all', label: 'Todas as origens' },
-  { key: 'page', label: 'Esta origem' },
-  { key: 'third-party', label: 'Terceiros' },
-];
+const ORIGINS = ['all', 'page', 'third-party'];
 
 const PERIODS = [
-  { key: 'all', label: 'Todo o período', ms: 0 },
-  { key: '1m', label: 'Último minuto', ms: 60_000 },
-  { key: '5m', label: 'Últimos 5 min', ms: 5 * 60_000 },
-  { key: '15m', label: 'Últimos 15 min', ms: 15 * 60_000 },
+  { key: 'all', ms: 0 },
+  { key: '1m', ms: 60_000 },
+  { key: '5m', ms: 5 * 60_000 },
+  { key: '15m', ms: 15 * 60_000 },
 ];
 
 /** Lets message rows look up related requests on demand without re-rendering when requests change. */
@@ -173,6 +226,7 @@ export function ConsoleTab({ store, logs, groups, requests, active, focus, onNav
   }, [focus]);
 
   const shown = grouped ? visibleGroups.length : visible.length;
+  const t = m();
 
   return (
     <div className="con">
@@ -184,36 +238,36 @@ export function ConsoleTab({ store, logs, groups, requests, active, focus, onNav
             store.clearConsole();
             setOpenGroups(new Set());
           }}
-          title="Limpar console"
+          title={t.clear}
         >
           <IconClear />
         </button>
-        <input className="fdt-input" placeholder="Filtrar" value={query} onChange={(e) => setQuery(e.target.value)} spellCheck={false} />
-        <label className="check" title="Agrupar mensagens equivalentes (mesma mensagem, origem e stack trace)">
-          <input type="checkbox" checked={grouped} onChange={(e) => setGrouped(e.target.checked)} /> Agrupar
+        <input className="fdt-input" placeholder={t.filter} value={query} onChange={(e) => setQuery(e.target.value)} spellCheck={false} />
+        <label className="check" title={t.groupTitle}>
+          <input type="checkbox" checked={grouped} onChange={(e) => setGrouped(e.target.checked)} /> {t.group}
         </label>
-        <label className="check" title="Mostrar horário">
-          <input type="checkbox" checked={showTime} onChange={(e) => setShowTime(e.target.checked)} /> Hora
+        <label className="check" title={t.timeTitle}>
+          <input type="checkbox" checked={showTime} onChange={(e) => setShowTime(e.target.checked)} /> {t.time}
         </label>
       </div>
-      <div className="chips" role="radiogroup" aria-label="Nível">
+      <div className="chips" role="radiogroup" aria-label={t.level}>
         {LEVELS.map((l) => (
           <button key={l.key} type="button" role="radio" aria-checked={level === l.key} className="chip" onClick={() => setLevel(l.key)}>
             {l.label}
           </button>
         ))}
         <span className="chips-end">
-          <select className={`fdt-select${origin !== 'all' ? ' is-set' : ''}`} value={origin} onChange={(e) => setOrigin(e.target.value)} aria-label="Origem">
+          <select className={`fdt-select${origin !== 'all' ? ' is-set' : ''}`} value={origin} onChange={(e) => setOrigin(e.target.value)} aria-label={t.origin}>
             {ORIGINS.map((o) => (
-              <option key={o.key} value={o.key}>
-                {o.label}
+              <option key={o} value={o}>
+                {t.origins[o]}
               </option>
             ))}
           </select>
-          <select className={`fdt-select${period !== 'all' ? ' is-set' : ''}`} value={period} onChange={(e) => setPeriod(e.target.value)} aria-label="Período">
+          <select className={`fdt-select${period !== 'all' ? ' is-set' : ''}`} value={period} onChange={(e) => setPeriod(e.target.value)} aria-label={t.period}>
             {PERIODS.map((p) => (
               <option key={p.key} value={p.key}>
-                {p.label}
+                {t.periods[p.key]}
               </option>
             ))}
           </select>
@@ -237,7 +291,7 @@ export function ConsoleTab({ store, logs, groups, requests, active, focus, onNav
                 ),
               )
             : visible.map((e) => <Message key={e.id} entry={e} showTime={showTime} />)}
-          {!shown && <div className="empty">{logs.length ? 'Nenhuma mensagem corresponde ao filtro.' : 'Nenhuma mensagem ainda.'}</div>}
+          {!shown && <div className="empty">{logs.length ? t.noMatch : t.empty}</div>}
         </div>
       </RelationsContext.Provider>
       <Prompt onRun={(code) => {
@@ -258,8 +312,10 @@ interface GroupRowProps {
 }
 
 const GroupRow = memo(function GroupRow({ group: g, showTime, open, members = [], onToggle }: GroupRowProps) {
+  useLocale();
+  const t = m();
   const entry = useMemo(() => ({ ...g.sample, count: g.count }), [g]);
-  const span = `primeira ${formatClock(g.firstTime)} · última ${formatClock(g.lastTime)}`;
+  const span = t.span(formatClock(g.firstTime), formatClock(g.lastTime));
   const recent = members.slice(-MAX_MEMBERS);
   const retained = members.reduce((n, e) => n + (e.count ?? 1), 0);
   return (
@@ -268,9 +324,9 @@ const GroupRow = memo(function GroupRow({ group: g, showTime, open, members = []
       {open && (
         <div className="msg-group-members">
           <div className="msg-group-meta">
-            {g.count} ocorrências · {span}
-            {retained < g.count && ` · ${g.count - retained} mais antigas já saíram do buffer`}
-            {recent.length < members.length && ` · exibindo as ${recent.length} entradas mais recentes`}
+            {t.occurrences(g.count)} · {span}
+            {retained < g.count && t.leftBuffer(g.count - retained)}
+            {recent.length < members.length && t.showingRecent(recent.length)}
           </div>
           {recent.map((e) => (
             <Message key={e.id} entry={e} showTime />
@@ -292,6 +348,8 @@ const Message = memo(function Message({ entry: e, showTime, group }: MessageProp
   const [stackOpen, setStackOpen] = useState(false);
   const [relatedOpen, setRelatedOpen] = useState(false);
   const relations = useContext(RelationsContext);
+  useLocale();
+  const t = m();
   const canRelate = !!relations && (e.level === 'error' || e.level === 'warn');
   const icon = e.level === 'error' ? '✕' : e.level === 'warn' ? '⚠' : e.level === 'command' ? '›' : e.level === 'result' ? '‹' : '';
   const count = e.count && e.count > 1 ? e.count : 0;
@@ -304,7 +362,7 @@ const Message = memo(function Message({ entry: e, showTime, group }: MessageProp
           className="msg-count is-toggle"
           aria-expanded={group.open}
           onClick={group.onToggle}
-          title={`${e.count} ocorrências (${group.span}) — ${group.open ? 'recolher' : 'expandir'}`}
+          title={t.toggleTitle(e.count ?? 0, group.span, group.open)}
         >
           <IconChevron open={group.open} width={8} height={8} />
           {e.count}
@@ -331,7 +389,7 @@ const Message = memo(function Message({ entry: e, showTime, group }: MessageProp
               type="button"
               className="msg-rel is-exact"
               onClick={() => relations!.open({ kind: 'request', id: e.request! })}
-              title={`Este erro veio da requisição ${relations!.label({ kind: 'request', id: e.request }).text} — abrir na aba Network`}
+              title={t.fromRequest(relations!.label({ kind: 'request', id: e.request }).text)}
             >
               NET ↗
             </button>
@@ -340,8 +398,8 @@ const Message = memo(function Message({ entry: e, showTime, group }: MessageProp
             type="button"
             className="msg-rel msg-ai"
             onClick={() => relations!.investigate({ kind: 'log', id: e.id })}
-            title="Investigar com IA: abre o Assistant focado nesta mensagem e nas requisições relacionadas"
-            aria-label="Investigar com IA"
+            title={t.aiTitle}
+            aria-label={t.ai}
           >
             <IconAssistant size={11} />
           </button>
@@ -350,7 +408,7 @@ const Message = memo(function Message({ entry: e, showTime, group }: MessageProp
             className={`msg-rel${relatedOpen ? ' is-active' : ''}`}
             aria-expanded={relatedOpen}
             onClick={() => setRelatedOpen(!relatedOpen)}
-            title="Requisições possivelmente relacionadas"
+            title={t.related}
           >
             ⇄
           </button>
@@ -370,8 +428,8 @@ function RelatedRequests({ entry, relations }: { entry: ConsoleEntry; relations:
   const items = useMemo(() => relations.find(entry), [entry, relations]);
   return (
     <div className="msg-related">
-      <span className="msg-related-title">Requisições possivelmente relacionadas</span>
-      <CorrelationList items={items} label={relations.label} onOpen={relations.open} empty="Nenhuma requisição relacionada: sem vínculo de objeto, de stack ou falha logo antes." />
+      <span className="msg-related-title">{m().related}</span>
+      <CorrelationList items={items} label={relations.label} onOpen={relations.open} empty={m().noRelated} />
     </div>
   );
 }
@@ -474,7 +532,7 @@ function Prompt({ onRun }: { onRun: (code: string) => void }) {
       <textarea
         rows={Math.min(6, code.split('\n').length)}
         value={code}
-        placeholder="Executar JavaScript na página (Enter executa, Shift+Enter quebra linha)"
+        placeholder={m().prompt}
         spellCheck={false}
         onChange={(e) => setCode(e.target.value)}
         onKeyDown={(e) => {

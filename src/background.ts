@@ -4,7 +4,27 @@
  * handles the toolbar icon / keyboard shortcut, and calls the AI provider for the assistant.
  */
 import { AI_CONFIG_KEY, AI_PORT, EMPTY_AI_CONFIG, providerById, type AiConfig, type AiRequest, type AiResponse } from './shared/ai';
+import { defineMessages, setLocale } from './i18n';
 import type { BackgroundMessage, WebRequestInfo } from './shared/types';
+
+const m = defineMessages({
+  pt: {
+    unknownProvider: 'Provider desconhecido.',
+    noProvider: 'Nenhum provider configurado. Adicione uma API key nas configurações.',
+    invalidKey: 'API key inválida (401).',
+    noCredit: 'Saldo insuficiente na conta do provider (402).',
+    rateLimited: 'Limite de requisições atingido (429). Tente novamente em instantes.',
+    error: (status: number, detail: string) => `Erro ${status}${detail ? `: ${detail}` : ''}`,
+  },
+  en: {
+    unknownProvider: 'Unknown provider.',
+    noProvider: 'No provider configured. Add an API key in the settings.',
+    invalidKey: 'Invalid API key (401).',
+    noCredit: 'Insufficient balance in the provider account (402).',
+    rateLimited: 'Rate limit reached (429). Try again in a moment.',
+    error: (status, detail) => `Error ${status}${detail ? `: ${detail}` : ''}`,
+  },
+});
 
 const ALL = { urls: ['<all_urls>'] };
 const requestHeaders = new Map<string, Record<string, string>>();
@@ -86,10 +106,12 @@ chrome.runtime.onConnect.addListener((port) => {
   };
 
   port.onMessage.addListener(async (req: AiRequest) => {
+    // The service worker has no settings of its own: errors follow the language of the tab that asked.
+    if (req.locale) setLocale(req.locale);
     try {
       if (req.kind === 'test') {
         const provider = providerById(req.providerId);
-        if (!provider) throw new Error('Provider desconhecido.');
+        if (!provider) throw new Error(m().unknownProvider);
         const res = await fetch(`${provider.baseUrl}/models`, {
           headers: { Authorization: `Bearer ${req.apiKey}` },
           signal: abort.signal,
@@ -103,7 +125,7 @@ chrome.runtime.onConnect.addListener((port) => {
       const config = (stored as AiConfig | undefined) ?? EMPTY_AI_CONFIG;
       const provider = providerById(config.active);
       const settings = provider && config.providers[provider.id];
-      if (!provider || !settings?.apiKey) throw new Error('Nenhum provider configurado. Adicione uma API key nas configurações.');
+      if (!provider || !settings?.apiKey) throw new Error(m().noProvider);
 
       const res = await fetch(`${provider.baseUrl}/chat/completions`, {
         method: 'POST',
@@ -160,8 +182,8 @@ async function errorMessage(res: Response) {
   } catch {
     /* not JSON */
   }
-  if (res.status === 401) return 'API key inválida (401).';
-  if (res.status === 402) return 'Saldo insuficiente na conta do provider (402).';
-  if (res.status === 429) return 'Limite de requisições atingido (429). Tente novamente em instantes.';
-  return `Erro ${res.status}${detail ? `: ${detail.slice(0, 300)}` : ''}`;
+  if (res.status === 401) return m().invalidKey;
+  if (res.status === 402) return m().noCredit;
+  if (res.status === 429) return m().rateLimited;
+  return m().error(res.status, detail.slice(0, 300));
 }

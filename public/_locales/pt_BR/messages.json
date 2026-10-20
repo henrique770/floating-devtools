@@ -1,0 +1,5 @@
+{
+  "description": { "message": "Network e Console em um botão flutuante e arrastável, sem espremer a página." },
+  "actionTitle": { "message": "Mostrar/ocultar Floating DevTools" },
+  "togglePanel": { "message": "Abrir/fechar o painel" }
+}

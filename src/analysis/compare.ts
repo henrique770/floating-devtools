@@ -5,7 +5,33 @@
  *
  * Every diff is bounded so huge payloads can't freeze the page.
  */
+import { defineMessages } from '../i18n';
 import type { NetworkEntry } from '../shared/types';
+
+const m = defineMessages({
+  pt: {
+    notCaptured: 'Corpo não capturado.',
+    url: 'URL (sem query)',
+    method: 'Método',
+    type: 'Tipo',
+    duration: 'Duração total',
+    transferred: 'Transferido',
+    bodySize: 'Tamanho do corpo',
+    yes: 'sim',
+    no: 'não',
+  },
+  en: {
+    notCaptured: 'Body not captured.',
+    url: 'URL (without query)',
+    method: 'Method',
+    type: 'Type',
+    duration: 'Total duration',
+    transferred: 'Transferred',
+    bodySize: 'Body size',
+    yes: 'yes',
+    no: 'no',
+  },
+});
 
 export type DiffStatus = 'same' | 'changed' | 'added' | 'removed';
 
@@ -203,7 +229,7 @@ function parseJson(text: string): { ok: true; value: unknown } | { ok: false } {
  */
 export function compareBodies(a: string | undefined, b: string | undefined, noteA?: string, noteB?: string): BodyComparison {
   if (a === undefined || b === undefined) {
-    return { kind: 'unavailable', a: a === undefined ? (noteA ?? 'Corpo não capturado.') : undefined, b: b === undefined ? (noteB ?? 'Corpo não capturado.') : undefined };
+    return { kind: 'unavailable', a: a === undefined ? (noteA ?? m().notCaptured) : undefined, b: b === undefined ? (noteB ?? m().notCaptured) : undefined };
   }
   const x = a;
   const y = b;
@@ -237,17 +263,19 @@ export function summaryRows(a: NetworkEntry, b: NetworkEntry, f: Formatter): Sum
     return row;
   };
   const urlBase = (u: string) => u.split(/[?#]/)[0];
+  const t = m();
+  const yesNo = (v: boolean | undefined) => (v ? t.yes : t.no);
   return [
-    text('URL (sem query)', urlBase(a.url), urlBase(b.url)),
-    text('Método', a.method, b.method),
+    text(t.url, urlBase(a.url), urlBase(b.url)),
+    text(t.method, a.method, b.method),
     text('Status', f.status(a), f.status(b)),
-    text('Tipo', a.type, b.type),
+    text(t.type, a.type, b.type),
     text('Content-Type', a.mimeType ?? '—', b.mimeType ?? '—'),
-    num('Duração total', a.duration, b.duration, 'ms'),
+    num(t.duration, a.duration, b.duration, 'ms'),
     num('TTFB', a.timing?.waiting, b.timing?.waiting, 'ms'),
     num('Download', a.timing?.download, b.timing?.download, 'ms'),
-    num('Transferido', a.transferSize, b.transferSize, 'bytes'),
-    num('Tamanho do corpo', a.resourceSize, b.resourceSize, 'bytes'),
-    text('Cache', a.fromCache ? 'sim' : 'não', b.fromCache ? 'sim' : 'não'),
+    num(t.transferred, a.transferSize, b.transferSize, 'bytes'),
+    num(t.bodySize, a.resourceSize, b.resourceSize, 'bytes'),
+    text('Cache', yesNo(a.fromCache), yesNo(b.fromCache)),
   ];
 }

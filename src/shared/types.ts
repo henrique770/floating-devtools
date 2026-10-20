@@ -25,6 +25,13 @@ export interface Timing {
   download: number;
 }
 
+export type BodyNote =
+  | { kind: 'stream' }
+  | { kind: 'too-large' }
+  | { kind: 'binary'; detail: string }
+  | { kind: 'unreadable'; detail: string }
+  | { kind: 'unsupported'; detail: string };
+
 export interface NetworkEntry {
   id: string;
   url: string;
@@ -47,7 +54,8 @@ export interface NetworkEntry {
   requestBody?: string;
   responseHeaders?: Record<string, string>;
   responseBody?: string;
-  responseBodyNote?: string;
+  /** Why `responseBody` is missing. Structured, so the UI words it in its own language. */
+  responseBodyNote?: BodyNote;
   timing?: Timing;
   /** Set once the background webRequest data has been merged in. */
   webMatched?: boolean;
@@ -111,7 +119,8 @@ export type PageMessage =
   | { kind: 'console-clear' };
 
 /** UI -> Page (MAIN world) */
-export type UIMessage = { kind: 'ready' } | { kind: 'eval'; code: string };
+/** `blockedLabel` prefixes the error when the site's CSP blocks eval (the page hook can't read the interface language). */
+export type UIMessage = { kind: 'ready' } | { kind: 'eval'; code: string; blockedLabel?: string };
 
 /** Background -> content script */
 export interface WebRequestInfo {

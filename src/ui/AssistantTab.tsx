@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { DevtoolsStore, Snapshot } from '../content/store';
 import { AI_PORT, type AiRequest, type AiResponse } from '../shared/ai';
 import { describeRedactions } from '../analysis/redact';
+import { defineMessages, getLocale, plural } from '../i18n';
 import { buildContext, buildPayload, OVERVIEW_WITH_FOCUS } from './assistantContext';
 import {
   clearHistory,
@@ -20,6 +21,7 @@ import { isErrorEntry } from './format';
 import { IconAssistant, IconHistory, IconPlus, IconSend, IconStop, IconTrash } from './Icons';
 import { Markdown } from './Markdown';
 import { activeProvider, useAiConfig } from './useAiConfig';
+import { useLocale } from './useLocale';
 
 const MAX_HISTORY = 20;
 
@@ -28,7 +30,108 @@ type ConversationMeta = Pick<Conversation, 'id' | 'title' | 'host' | 'createdAt'
 /** Focus as used by the tab: freshly built (with masking stats) or restored from history. */
 type Focus = SavedFocus & { redactions?: FocusContext['redactions'] };
 
-const FOCUS_KIND: Record<FocusTarget['kind'], string> = { log: 'Log', request: 'Requisição', diagnostic: 'Diagnóstico' };
+const m = defineMessages({
+  pt: {
+    kind: { log: 'Log', request: 'Requisição', diagnostic: 'Diagnóstico' } as Record<FocusTarget['kind'], string>,
+    gone: 'Esse item não está mais capturado (saiu do buffer ou foi limpo).',
+    reloaded: 'A extensão foi recarregada. Atualize a página para usar o assistente.',
+    newChat: 'Nova conversa',
+    history: 'Histórico de conversas',
+    contextTitle: 'Ver exatamente o que será enviado como contexto para a IA',
+    context: 'Contexto:',
+    errors: (n: number) => plural(n, 'erro', 'erros'),
+    warnings: (n: number) => plural(n, 'aviso', 'avisos'),
+    failures: (n: number) => plural(n, 'falha', 'falhas'),
+    requests: (n: number) => plural(n, 'requisição', 'requisições'),
+    configure: 'Configurar provider',
+    noProvider: 'Sem provider',
+    connect: 'Conecte um provider de IA para perguntar sobre os erros, avisos e requisições desta página.',
+    byok: 'Você usa a sua própria API key (BYOK). Ela fica salva apenas neste navegador.',
+    addProvider: 'Adicionar provider',
+    focusIntro: (kind: FocusTarget['kind']) =>
+      `Vou analisar ${kind === 'request' ? 'esta requisição' : kind === 'log' ? 'este erro' : 'este diagnóstico'} com os eventos relacionados. Nada foi enviado ainda: escolha uma pergunta ou escreva a sua.`,
+    reviewContext: 'Você pode revisar o contexto exato em “Ver contexto”.',
+    hello: 'Olá! Eu vejo o que o DevTools capturou nesta página — erros, avisos, requisições e os diagnósticos do Insights. Pergunte o que quiser.',
+    pick: 'Não sabe o que perguntar? Escolha uma das opções:',
+    thinking: 'Pensando…',
+    analyzing: 'Analisando os logs…',
+    viewContext: 'Ver contexto',
+    focusLocked: 'O foco faz parte desta conversa; comece uma nova para trocar',
+    removeFocus: 'Remover o foco',
+    quickActions: 'Ações rápidas',
+    disclaimer: 'A IA pode cometer erros. Por isso, é importante checar as respostas.',
+    ask: 'Faça uma pergunta…',
+    setup: 'Configure um provider para começar',
+    stop: 'Parar',
+    send: 'Enviar (Enter)',
+    sentNote: 'Este texto é enviado ao provider junto com cada pergunta (a visão geral é recalculada no envio). Valores de query string e cookies nunca são incluídos.',
+    focusNote: 'Do item em foco entram também uma seleção de headers sem credenciais e trechos do payload e da resposta, já mascarados.',
+    noBodies: 'Headers e corpos de requisição não são incluídos.',
+    masked: (n: number) => (n === 1 ? '1 valor mascarado' : `${n} valores mascarados`),
+    noneMasked: 'Nenhum valor sensível detectado no que será enviado.',
+    review: 'A detecção é automática e pode não reconhecer todo dado sensível: revise antes de perguntar.',
+    back: 'Voltar para a conversa',
+    focusHeading: (title: string) => `Item em foco: ${title}`,
+    overview: 'Visão geral da página',
+    search: 'Buscar nas conversas',
+    questions: (n: number) => (n === 1 ? '1 pergunta' : `${n} perguntas`),
+    deleteChat: 'Apagar conversa',
+    notFound: 'Nenhuma conversa encontrada.',
+    noneSaved: 'Nenhuma conversa salva ainda.',
+    confirmClear: 'Apagar todo o histórico de conversas?',
+    clearHistory: 'Limpar histórico',
+  },
+  en: {
+    kind: { log: 'Log', request: 'Request', diagnostic: 'Diagnostic' },
+    gone: 'This item is no longer captured (it left the buffer or was cleared).',
+    reloaded: 'The extension was reloaded. Refresh the page to use the assistant.',
+    newChat: 'New conversation',
+    history: 'Conversation history',
+    contextTitle: 'See exactly what will be sent to the AI as context',
+    context: 'Context:',
+    errors: (n) => plural(n, 'error', 'errors'),
+    warnings: (n) => plural(n, 'warning', 'warnings'),
+    failures: (n) => plural(n, 'failure', 'failures'),
+    requests: (n) => plural(n, 'request', 'requests'),
+    configure: 'Configure provider',
+    noProvider: 'No provider',
+    connect: 'Connect an AI provider to ask about the errors, warnings and requests on this page.',
+    byok: 'You use your own API key (BYOK). It is stored only in this browser.',
+    addProvider: 'Add provider',
+    focusIntro: (kind) =>
+      `I will analyze ${kind === 'request' ? 'this request' : kind === 'log' ? 'this error' : 'this diagnostic'} together with its related events. Nothing was sent yet: pick a question or write your own.`,
+    reviewContext: 'You can review the exact context in “View context”.',
+    hello: 'Hi! I can see what the DevTools captured on this page — errors, warnings, requests and the Insights diagnostics. Ask anything.',
+    pick: "Not sure what to ask? Pick one of these:",
+    thinking: 'Thinking…',
+    analyzing: 'Analyzing the logs…',
+    viewContext: 'View context',
+    focusLocked: 'The focus is part of this conversation; start a new one to change it',
+    removeFocus: 'Remove focus',
+    quickActions: 'Quick actions',
+    disclaimer: 'AI can make mistakes. Check the answers.',
+    ask: 'Ask a question…',
+    setup: 'Configure a provider to start',
+    stop: 'Stop',
+    send: 'Send (Enter)',
+    sentNote: 'This text is sent to the provider with every question (the overview is recomputed on send). Query string values and cookies are never included.',
+    focusNote: 'For the item in focus, a selection of headers without credentials and excerpts of the payload and response are also included, already masked.',
+    noBodies: 'Request headers and bodies are not included.',
+    masked: (n) => (n === 1 ? '1 value masked' : `${n} values masked`),
+    noneMasked: 'No sensitive values detected in what will be sent.',
+    review: 'Detection is automatic and may miss some sensitive data: review before asking.',
+    back: 'Back to the conversation',
+    focusHeading: (title) => `Item in focus: ${title}`,
+    overview: 'Page overview',
+    search: 'Search conversations',
+    questions: (n) => (n === 1 ? '1 question' : `${n} questions`),
+    deleteChat: 'Delete conversation',
+    notFound: 'No conversation found.',
+    noneSaved: 'No saved conversations yet.',
+    confirmClear: 'Delete the whole conversation history?',
+    clearHistory: 'Clear history',
+  },
+});
 
 interface Props {
   store: DevtoolsStore;
@@ -58,8 +161,13 @@ export function AssistantTab({ store, snap, active, onOpenSettings, investigate 
   const stickToBottom = useRef(true);
 
   const failed = useMemo(() => snap.requests.filter(isErrorEntry).length, [snap.requests]);
+  const locale = useLocale();
+  const t = m();
 
-  const actions = useMemo(() => quickActions(focus ? { ...focus, redactions: focus.redactions ?? { found: {}, total: 0 } } : null, snap), [focus, snap]);
+  const actions = useMemo(
+    () => quickActions(focus ? { ...focus, redactions: focus.redactions ?? { found: {}, total: 0 } } : null, snap),
+    [focus, snap, locale],
+  );
 
   useLayoutEffect(() => {
     const el = listRef.current;
@@ -83,7 +191,7 @@ export function AssistantTab({ store, snap, active, onOpenSettings, investigate 
     setView('chat');
     const ctx = buildFocusContext(investigate.target, store.getSnapshot());
     setFocus(ctx);
-    setNotice(ctx ? null : 'Esse item não está mais capturado (saiu do buffer ou foi limpo).');
+    setNotice(ctx ? null : m().gone);
     requestAnimationFrame(() => inputRef.current?.focus({ preventScroll: true }));
     // Only on a new request; leave() reads the current conversation through refs/state at that moment.
   }, [investigate]);
@@ -104,7 +212,7 @@ export function AssistantTab({ store, snap, active, onOpenSettings, investigate 
   const send = (text: string) => {
     const question = text.trim();
     if (!question || busy || !current) return;
-    const thread: Message[] = [...messages.filter((m) => !m.error), { role: 'user', content: question }];
+    const thread: Message[] = [...messages.filter((msg) => !msg.error), { role: 'user', content: question }];
     // The page overview is rebuilt on every question; the focus block stays as it was when the item was chosen.
     const overview = buildContext(store.getSnapshot(), focus ? OVERVIEW_WITH_FOCUS : undefined).text;
     const payload = buildPayload(thread.slice(-MAX_HISTORY), overview, focus ?? undefined);
@@ -128,7 +236,7 @@ export function AssistantTab({ store, snap, active, onOpenSettings, investigate 
     try {
       p = chrome.runtime.connect({ name: AI_PORT });
     } catch {
-      setMessages((m) => [...m, { role: 'assistant', content: 'A extensão foi recarregada. Atualize a página para usar o assistente.', error: true }]);
+      setMessages((prev) => [...prev, { role: 'assistant', content: m().reloaded, error: true }]);
       setBusy(false);
       return;
     }
@@ -140,12 +248,12 @@ export function AssistantTab({ store, snap, active, onOpenSettings, investigate 
         setBusy('streaming');
         if (!started) {
           started = true;
-          setMessages((m) => [...m, { role: 'assistant', content: msg.text }]);
+          setMessages((prev) => [...prev, { role: 'assistant', content: msg.text }]);
         } else {
-          setMessages((m) => [...m.slice(0, -1), { ...m[m.length - 1], content: m[m.length - 1].content + msg.text }]);
+          setMessages((prev) => [...prev.slice(0, -1), { ...prev[prev.length - 1], content: prev[prev.length - 1].content + msg.text }]);
         }
       } else {
-        if (msg.kind === 'error') setMessages((m) => [...m, { role: 'assistant', content: msg.message, error: true }]);
+        if (msg.kind === 'error') setMessages((prev) => [...prev, { role: 'assistant', content: msg.message, error: true }]);
         p.disconnect();
         if (port.current === p) port.current = null;
         setBusy(false);
@@ -156,7 +264,7 @@ export function AssistantTab({ store, snap, active, onOpenSettings, investigate 
       port.current = null;
       setBusy(false);
     });
-    p.postMessage({ kind: 'chat', messages: payload } satisfies AiRequest);
+    p.postMessage({ kind: 'chat', messages: payload, locale: getLocale() } satisfies AiRequest);
   };
 
   /** Saves a conversation that is being left mid-answer, before switching away from it. */
@@ -195,14 +303,14 @@ export function AssistantTab({ store, snap, active, onOpenSettings, investigate 
   return (
     <div className="ai">
       <div className="toolbar">
-        <button type="button" className="fdt-icon-btn" onClick={reset} title="Nova conversa" disabled={!messages.length && !focus && view === 'chat'}>
+        <button type="button" className="fdt-icon-btn" onClick={reset} title={t.newChat} disabled={!messages.length && !focus && view === 'chat'}>
           <IconPlus />
         </button>
         <button
           type="button"
           className={`fdt-icon-btn${view === 'history' ? ' is-active' : ''}`}
           onClick={() => setView(view === 'history' ? 'chat' : 'history')}
-          title="Histórico de conversas"
+          title={t.history}
         >
           <IconHistory />
         </button>
@@ -211,13 +319,14 @@ export function AssistantTab({ store, snap, active, onOpenSettings, investigate 
           className={`ai-context${view === 'context' ? ' is-active' : ''}`}
           onClick={() => setView(view === 'context' ? 'chat' : 'context')}
           aria-pressed={view === 'context'}
-          title="Ver exatamente o que será enviado como contexto para a IA"
+          title={t.contextTitle}
         >
-          Contexto: <b className={snap.errors ? 'is-error' : ''}>{snap.errors} erros</b> · <b className={snap.warnings ? 'is-warn' : ''}>{snap.warnings} avisos</b> ·{' '}
-          <b className={failed ? 'is-error' : ''}>{failed} falhas</b> · {snap.requests.length} requisições
+          {t.context} <b className={snap.errors ? 'is-error' : ''}>{t.errors(snap.errors)}</b> ·{' '}
+          <b className={snap.warnings ? 'is-warn' : ''}>{t.warnings(snap.warnings)}</b> · <b className={failed ? 'is-error' : ''}>{t.failures(failed)}</b> ·{' '}
+          {t.requests(snap.requests.length)}
         </button>
-        <button type="button" className="ai-provider" onClick={onOpenSettings} title="Configurar provider">
-          {current ? `${current.provider.name} · ${current.settings.model}` : 'Sem provider'}
+        <button type="button" className="ai-provider" onClick={onOpenSettings} title={t.configure}>
+          {current ? `${current.provider.name} · ${current.settings.model}` : t.noProvider}
         </button>
       </div>
 
@@ -237,10 +346,10 @@ export function AssistantTab({ store, snap, active, onOpenSettings, investigate 
           {!current ? (
             <div className="ai-welcome">
               <IconAssistant size={36} className="ai-sparkle" />
-              <p>Conecte um provider de IA para perguntar sobre os erros, avisos e requisições desta página.</p>
-              <p className="muted">Você usa a sua própria API key (BYOK). Ela fica salva apenas neste navegador.</p>
+              <p>{t.connect}</p>
+              <p className="muted">{t.byok}</p>
               <button type="button" className="ai-cta" onClick={onOpenSettings}>
-                Adicionar provider
+                {t.addProvider}
               </button>
             </div>
           ) : !messages.length ? (
@@ -249,16 +358,13 @@ export function AssistantTab({ store, snap, active, onOpenSettings, investigate 
               {notice && <p className="ai-notice">{notice}</p>}
               {focus ? (
                 <>
-                  <p>
-                    Vou analisar {focus.target.kind === 'request' ? 'esta requisição' : focus.target.kind === 'log' ? 'este erro' : 'este diagnóstico'} com os
-                    eventos relacionados. Nada foi enviado ainda: escolha uma pergunta ou escreva a sua.
-                  </p>
-                  <p className="muted">Você pode revisar o contexto exato em “Ver contexto”.</p>
+                  <p>{t.focusIntro(focus.target.kind)}</p>
+                  <p className="muted">{t.reviewContext}</p>
                 </>
               ) : (
                 <>
-                  <p>Olá! Eu vejo o que o DevTools capturou nesta página — erros, avisos, requisições e os diagnósticos do Insights. Pergunte o que quiser.</p>
-                  <p>Não sabe o que perguntar? Escolha uma das opções:</p>
+                  <p>{t.hello}</p>
+                  <p>{t.pick}</p>
                 </>
               )}
               <div className="ai-suggestions">
@@ -270,14 +376,14 @@ export function AssistantTab({ store, snap, active, onOpenSettings, investigate 
               </div>
             </div>
           ) : (
-            messages.map((m, i) =>
-              m.role === 'user' ? (
+            messages.map((msg, i) =>
+              msg.role === 'user' ? (
                 <div key={i} className="ai-msg is-user">
-                  {m.content}
+                  {msg.content}
                 </div>
               ) : (
-                <div key={i} className={`ai-msg is-assistant${m.error ? ' is-error' : ''}`}>
-                  {m.error ? m.content : <Markdown text={m.content} />}
+                <div key={i} className={`ai-msg is-assistant${msg.error ? ' is-error' : ''}`}>
+                  {msg.error ? msg.content : <Markdown text={msg.content} />}
                 </div>
               ),
             )
@@ -289,7 +395,7 @@ export function AssistantTab({ store, snap, active, onOpenSettings, investigate 
                 <i />
                 <i />
               </span>
-              {busy === 'thinking' ? 'Pensando…' : 'Analisando os logs…'}
+              {busy === 'thinking' ? t.thinking : t.analyzing}
             </div>
           )}
         </div>
@@ -298,26 +404,26 @@ export function AssistantTab({ store, snap, active, onOpenSettings, investigate 
       {focus && view === 'chat' && (
         <div className="ai-focus">
           <div className="ai-focus-head">
-            <span className="ai-focus-kind">{FOCUS_KIND[focus.target.kind]}</span>
+            <span className="ai-focus-kind">{t.kind[focus.target.kind]}</span>
             <span className="ai-focus-title" title={focus.title}>
               {focus.title}
             </span>
             <button type="button" className="link-btn" onClick={() => setView('context')}>
-              Ver contexto
+              {t.viewContext}
             </button>
             <button
               type="button"
               className="fdt-icon-btn ai-focus-clear"
               onClick={() => setFocus(null)}
               disabled={!!messages.length}
-              title={messages.length ? 'O foco faz parte desta conversa; comece uma nova para trocar' : 'Remover o foco'}
-              aria-label="Remover o foco"
+              title={messages.length ? t.focusLocked : t.removeFocus}
+              aria-label={t.removeFocus}
             >
               ×
             </button>
           </div>
           {messages.length > 0 && !busy && (
-            <div className="ai-quick" role="group" aria-label="Ações rápidas">
+            <div className="ai-quick" role="group" aria-label={t.quickActions}>
               {actions.map((a) => (
                 <button key={a.label} type="button" className="ai-suggestion" onClick={() => send(a.question)} title={a.question}>
                   {a.label}
@@ -327,14 +433,14 @@ export function AssistantTab({ store, snap, active, onOpenSettings, investigate 
           )}
         </div>
       )}
-      <p className="ai-disclaimer">A IA pode cometer erros. Por isso, é importante checar as respostas.</p>
+      <p className="ai-disclaimer">{t.disclaimer}</p>
       <div className="ai-input">
         <textarea
           ref={inputRef}
           rows={Math.min(8, input.split('\n').length)}
           value={input}
           disabled={!current}
-          placeholder={current ? 'Faça uma pergunta…' : 'Configure um provider para começar'}
+          placeholder={current ? t.ask : t.setup}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
@@ -344,11 +450,11 @@ export function AssistantTab({ store, snap, active, onOpenSettings, investigate 
           }}
         />
         {busy ? (
-          <button type="button" className="ai-send" onClick={stop} title="Parar">
+          <button type="button" className="ai-send" onClick={stop} title={t.stop}>
             <IconStop />
           </button>
         ) : (
-          <button type="button" className="ai-send" onClick={() => send(input)} disabled={!current || !input.trim()} title="Enviar (Enter)">
+          <button type="button" className="ai-send" onClick={() => send(input)} disabled={!current || !input.trim()} title={t.send}>
             <IconSend />
           </button>
         )}
@@ -359,7 +465,9 @@ export function AssistantTab({ store, snap, active, onOpenSettings, investigate 
 
 /** The exact context text the next question will carry, after masking. */
 function ContextPreview({ snap, focus, onClose }: { snap: Snapshot; focus: Focus | null; onClose: () => void }) {
-  const context = useMemo(() => buildContext(snap, focus ? OVERVIEW_WITH_FOCUS : undefined), [snap, focus]);
+  const locale = useLocale();
+  const t = m();
+  const context = useMemo(() => buildContext(snap, focus ? OVERVIEW_WITH_FOCUS : undefined), [snap, focus, locale]);
   const total = context.redactions.total + (focus?.redactions?.total ?? 0);
   const found = { ...context.redactions.found };
   for (const [k, n] of Object.entries(focus?.redactions?.found ?? {}) as [keyof typeof found, number][]) found[k] = (found[k] ?? 0) + n;
@@ -367,31 +475,27 @@ function ContextPreview({ snap, focus, onClose }: { snap: Snapshot; focus: Focus
     <div className="ai-context-view">
       <div className="ai-context-note">
         <p>
-          Este texto é enviado ao provider junto com cada pergunta (a visão geral é recalculada no envio). Valores de query string e cookies nunca
-          são incluídos.{' '}
-          {focus
-            ? 'Do item em foco entram também uma seleção de headers sem credenciais e trechos do payload e da resposta, já mascarados.'
-            : 'Headers e corpos de requisição não são incluídos.'}
+          {t.sentNote} {focus ? t.focusNote : t.noBodies}
         </p>
         <p>
           {total ? (
             <>
-              <b>{total} {total === 1 ? 'valor mascarado' : 'valores mascarados'}</b>: {describeRedactions(found)}.
+              <b>{t.masked(total)}</b>: {describeRedactions(found)}.
             </>
           ) : (
-            'Nenhum valor sensível detectado no que será enviado.'
+            t.noneMasked
           )}{' '}
-          A detecção é automática e pode não reconhecer todo dado sensível: revise antes de perguntar.
+          {t.review}
         </p>
         <button type="button" className="link-btn" onClick={onClose}>
-          Voltar para a conversa
+          {t.back}
         </button>
       </div>
       {focus && (
         <>
-          <h4 className="ai-context-heading">Item em foco: {focus.title}</h4>
+          <h4 className="ai-context-heading">{t.focusHeading(focus.title)}</h4>
           <pre className="code-block ai-context-text">{focus.text}</pre>
-          <h4 className="ai-context-heading">Visão geral da página</h4>
+          <h4 className="ai-context-heading">{t.overview}</h4>
         </>
       )}
       <pre className="code-block ai-context-text">{context.text}</pre>
@@ -411,13 +515,14 @@ function HistoryList({ list, currentId, onOpen, onDelete }: HistoryProps) {
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return list;
-    return list.filter((c) => c.title.toLowerCase().includes(q) || c.host.includes(q) || c.messages.some((m) => m.content.toLowerCase().includes(q)));
+    return list.filter((c) => c.title.toLowerCase().includes(q) || c.host.includes(q) || c.messages.some((msg) => msg.content.toLowerCase().includes(q)));
   }, [list, query]);
 
+  const t = m();
   return (
     <div className="ai-history">
       <div className="ai-history-search">
-        <input className="fdt-input" placeholder="Buscar nas conversas" value={query} onChange={(e) => setQuery(e.target.value)} spellCheck={false} />
+        <input className="fdt-input" placeholder={t.search} value={query} onChange={(e) => setQuery(e.target.value)} spellCheck={false} />
       </div>
       <div className="ai-history-list">
         {visible.map((c) => (
@@ -425,23 +530,23 @@ function HistoryList({ list, currentId, onOpen, onDelete }: HistoryProps) {
             <button type="button" className="ai-history-open" onClick={() => onOpen(c)}>
               <span className="ai-history-title">{c.title}</span>
               <span className="ai-history-meta">
-                {c.host} · {relativeTime(c.updatedAt)} · {c.messages.filter((m) => m.role === 'user').length} perguntas
+                {c.host} · {relativeTime(c.updatedAt)} · {t.questions(c.messages.filter((msg) => msg.role === 'user').length)}
               </span>
             </button>
-            <button type="button" className="fdt-icon-btn ai-history-delete" onClick={() => onDelete(c.id)} title="Apagar conversa">
+            <button type="button" className="fdt-icon-btn ai-history-delete" onClick={() => onDelete(c.id)} title={t.deleteChat}>
               <IconTrash />
             </button>
           </div>
         ))}
-        {!visible.length && <div className="empty">{list.length ? 'Nenhuma conversa encontrada.' : 'Nenhuma conversa salva ainda.'}</div>}
+        {!visible.length && <div className="empty">{list.length ? t.notFound : t.noneSaved}</div>}
       </div>
       {list.length > 0 && (
         <button
           type="button"
           className="link-btn ai-history-clear"
-          onClick={() => window.confirm('Apagar todo o histórico de conversas?') && clearHistory()}
+          onClick={() => window.confirm(t.confirmClear) && clearHistory()}
         >
-          Limpar histórico
+          {t.clearHistory}
         </button>
       )}
     </div>

@@ -1,7 +1,8 @@
+import { defineMessages } from '../i18n';
+
 export interface FontOption {
   id: string;
   name: string;
-  note: string;
   /** Folder name in @fontsource / dist/fonts. Undefined = system font, nothing to load. */
   file?: string;
   recommended?: boolean;
@@ -11,18 +12,56 @@ export const FONT_WEIGHTS = [400, 500, 700] as const;
 export type FontWeight = (typeof FONT_WEIGHTS)[number];
 
 export const FONTS: FontOption[] = [
-  { id: 'system', name: 'Sistema', note: 'SF Mono / Menlo / Consolas — sem download' },
-  { id: 'atkinson', name: 'Atkinson Hyperlegible Mono', file: 'atkinson-hyperlegible-mono', note: 'Feita para baixa visão: 0/O e 1/l/I inconfundíveis', recommended: true },
-  { id: 'intel', name: 'Intel One Mono', file: 'intel-one-mono', note: 'Alto contraste e legibilidade para baixa visão', recommended: true },
-  { id: 'jetbrains', name: 'JetBrains Mono', file: 'jetbrains-mono', note: 'Altura-x alta, ótima em tamanhos pequenos', recommended: true },
-  { id: 'fira', name: 'Fira Code', file: 'fira-code', note: 'Ligaduras de código (=> !== >=)' },
-  { id: 'plex', name: 'IBM Plex Mono', file: 'ibm-plex-mono', note: 'Clara, neutra e com negrito marcante' },
-  { id: 'cascadia', name: 'Cascadia Code', file: 'cascadia-code', note: 'A fonte do Windows Terminal' },
-  { id: 'source', name: 'Source Code Pro', file: 'source-code-pro', note: 'Clássica da Adobe, traço limpo' },
-  { id: 'geist', name: 'Geist Mono', file: 'geist-mono', note: 'Estilo Vercel / Next.js' },
-  { id: 'commit', name: 'Commit Mono', file: 'commit-mono', note: 'Neutra, feita para não distrair' },
-  { id: 'victor', name: 'Victor Mono', file: 'victor-mono', note: 'Estreita: cabe mais texto por linha' },
+  { id: 'system', name: 'System' },
+  { id: 'atkinson', name: 'Atkinson Hyperlegible Mono', file: 'atkinson-hyperlegible-mono', recommended: true },
+  { id: 'intel', name: 'Intel One Mono', file: 'intel-one-mono', recommended: true },
+  { id: 'jetbrains', name: 'JetBrains Mono', file: 'jetbrains-mono', recommended: true },
+  { id: 'fira', name: 'Fira Code', file: 'fira-code' },
+  { id: 'plex', name: 'IBM Plex Mono', file: 'ibm-plex-mono' },
+  { id: 'cascadia', name: 'Cascadia Code', file: 'cascadia-code' },
+  { id: 'source', name: 'Source Code Pro', file: 'source-code-pro' },
+  { id: 'geist', name: 'Geist Mono', file: 'geist-mono' },
+  { id: 'commit', name: 'Commit Mono', file: 'commit-mono' },
+  { id: 'victor', name: 'Victor Mono', file: 'victor-mono' },
 ];
+
+const m = defineMessages<{ system: string; notes: Record<string, string> }>({
+  pt: {
+    system: 'Sistema',
+    notes: {
+      system: 'SF Mono / Menlo / Consolas — sem download',
+      atkinson: 'Feita para baixa visão: 0/O e 1/l/I inconfundíveis',
+      intel: 'Alto contraste e legibilidade para baixa visão',
+      jetbrains: 'Altura-x alta, ótima em tamanhos pequenos',
+      fira: 'Ligaduras de código (=> !== >=)',
+      plex: 'Clara, neutra e com negrito marcante',
+      cascadia: 'A fonte do Windows Terminal',
+      source: 'Clássica da Adobe, traço limpo',
+      geist: 'Estilo Vercel / Next.js',
+      commit: 'Neutra, feita para não distrair',
+      victor: 'Estreita: cabe mais texto por linha',
+    },
+  },
+  en: {
+    system: 'System',
+    notes: {
+      system: 'SF Mono / Menlo / Consolas — no download',
+      atkinson: 'Made for low vision: 0/O and 1/l/I unmistakable',
+      intel: 'High contrast and legibility for low vision',
+      jetbrains: 'Tall x-height, great at small sizes',
+      fira: 'Code ligatures (=> !== >=)',
+      plex: 'Clear, neutral, with a strong bold',
+      cascadia: 'The Windows Terminal font',
+      source: "Adobe's classic, clean strokes",
+      geist: 'Vercel / Next.js style',
+      commit: 'Neutral, made not to distract',
+      victor: 'Narrow: fits more text per line',
+    },
+  },
+});
+
+export const fontName = (f: FontOption) => (f.id === 'system' ? m().system : f.name);
+export const fontNote = (f: FontOption) => m().notes[f.id] ?? '';
 
 const SYSTEM_MONO = "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace";
 

@@ -1,7 +1,14 @@
 import { memo, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { copyText } from './format';
 import { highlight } from './highlight';
+import { defineMessages } from '../i18n';
 import { IconCheck, IconCopy } from './Icons';
+import { useLocale } from './useLocale';
+
+const msg = defineMessages({
+  pt: { code: 'código', copyCode: 'Copiar código', copied: 'Copiado', copy: 'Copiar' },
+  en: { code: 'code', copyCode: 'Copy code', copied: 'Copied', copy: 'Copy' },
+});
 
 /** Inline `code`, **bold** and *italic*. Everything is rendered as text nodes (no HTML). */
 function inline(text: string): ReactNode[] {
@@ -22,6 +29,7 @@ function inline(text: string): ReactNode[] {
 
 /** Small Markdown subset used by the assistant replies: headings, lists, fenced code, paragraphs. */
 export const Markdown = memo(function Markdown({ text }: { text: string }) {
+  useLocale();
   const blocks: ReactNode[] = [];
   const lines = text.split('\n');
   let i = 0;
@@ -80,19 +88,20 @@ function CodeBlock({ code, lang }: { code: string; lang: string }) {
     return () => clearTimeout(t);
   }, [copied]);
 
+  const t = msg();
   return (
     <div className="md-code">
       <div className="md-code-head">
-        <span className="md-code-lang">{lang || 'código'}</span>
+        <span className="md-code-lang">{lang || t.code}</span>
         <button
           type="button"
           className="md-code-copy"
           onClick={() => copyText(code).then(() => setCopied(true))}
-          title="Copiar código"
-          aria-label="Copiar código"
+          title={t.copyCode}
+          aria-label={t.copyCode}
         >
           {copied ? <IconCheck /> : <IconCopy />}
-          {copied ? 'Copiado' : 'Copiar'}
+          {copied ? t.copied : t.copy}
         </button>
       </div>
       <pre>{tokens}</pre>

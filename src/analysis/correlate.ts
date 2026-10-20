@@ -11,7 +11,31 @@
  * Computed on demand (when the user opens an event), never per captured event.
  */
 import type { ConsoleEntry, NetworkEntry, SerializedValue } from '../shared/types';
+import { defineMessages } from '../i18n';
 import type { EventRef } from './diagnostics/types';
+
+const m = defineMessages({
+  pt: {
+    failed: (error: string) => `falhou (${error})`,
+    networkError: 'erro de rede',
+    sameObject: 'O objeto de erro registrado é o mesmo gerado por esta requisição (rejeição do fetch ou falha de response.json()).',
+    sharedFrame: (fn: string, file: string) => `O stack do erro e o código que iniciou a requisição passam pela mesma função: ${fn} (${file}).`,
+    notJson: (delta: string, mime: string, start: string) => `Erro ao interpretar JSON ${delta} depois de uma resposta que não é JSON (${mime}${start ? `, começa com “${start}”` : ''}).`,
+    noContentType: 'sem content-type',
+    temporal: (req: string, delta: string) => `A requisição ${req} terminou ${delta} antes. Só há proximidade no tempo, o que não comprova relação.`,
+    confidence: { high: 'Alta', medium: 'Média', low: 'Baixa' } as Record<Confidence, string>,
+  },
+  en: {
+    failed: (error) => `failed (${error})`,
+    networkError: 'network error',
+    sameObject: 'The logged error object is the same one produced by this request (fetch rejection or response.json() failure).',
+    sharedFrame: (fn, file) => `The error stack and the code that started the request go through the same function: ${fn} (${file}).`,
+    notJson: (delta, mime, start) => `JSON parse error ${delta} after a response that is not JSON (${mime}${start ? `, starts with “${start}”` : ''}).`,
+    noContentType: 'no content-type',
+    temporal: (req, delta) => `The request ${req} finished ${delta} before. They are only close in time, which does not prove a relation.`,
+    confidence: { high: 'High', medium: 'Medium', low: 'Low' },
+  },
+});
 
 export type Confidence = 'high' | 'medium' | 'low';
 
@@ -72,7 +96,7 @@ function logText(entry: ConsoleEntry) {
 }
 
 const shortFile = (file: string) => file.split('/').pop() || file;
-const describe = (r: NetworkEntry) => (r.state === 'failed' ? `falhou (${r.error ?? 'erro de rede'})` : `HTTP ${r.status}`);
+const describe = (r: NetworkEntry) => (r.state === 'failed' ? m().failed(r.error ?? m().networkError) : `HTTP ${r.status}`);
 const ms = (n: number) => (Math.abs(n) < 1000 ? `${Math.round(n)} ms` : `${(n / 1000).toFixed(1)} s`);
 
 /** Best link between one log and one request, or null. */
@@ -84,7 +108,7 @@ export function correlate(log: ConsoleEntry, r: NetworkEntry, pageOrigin: string
     return {
       ref,
       confidence: 'high',
-      reason: 'O objeto de erro registrado é o mesmo gerado por esta requisição (rejeição do fetch ou falha de response.json()).',
+      reason: m().sameObject,
       deltaMs: delta,
     };
   }
@@ -101,7 +125,7 @@ export function correlate(log: ConsoleEntry, r: NetworkEntry, pageOrigin: string
         return {
           ref,
           confidence: 'medium',
-          reason: `O stack do erro e o código que iniciou a requisição passam pela mesma função: ${shared.fn} (${shortFile(shared.file)}).`,
+          reason: m().sharedFrame(shared.fn, shortFile(shared.file)),
           deltaMs: delta,
         };
       }
@@ -113,7 +137,7 @@ export function correlate(log: ConsoleEntry, r: NetworkEntry, pageOrigin: string
         return {
           ref,
           confidence: 'medium',
-          reason: `Erro ao interpretar JSON ${ms(delta)} depois de uma resposta que não é JSON (${mime || 'sem content-type'}${body ? `, começa com “${body.slice(0, 20)}”` : ''}).`,
+          reason: m().notJson(ms(delta), mime || m().noContentType, body.slice(0, 20)),
           deltaMs: delta,
         };
       }
@@ -124,7 +148,7 @@ export function correlate(log: ConsoleEntry, r: NetworkEntry, pageOrigin: string
     return {
       ref,
       confidence: 'low',
-      reason: `A requisição ${describe(r)} terminou ${ms(delta)} antes. Só há proximidade no tempo, o que não comprova relação.`,
+      reason: m().temporal(describe(r), ms(delta)),
       deltaMs: delta,
     };
   }
@@ -155,4 +179,4 @@ export function relatedLogs(request: NetworkEntry, logs: ConsoleEntry[], pageOri
   return sortCorrelations(out);
 }
 
-export const CONFIDENCE_LABEL: Record<Confidence, string> = { high: 'Alta', medium: 'Média', low: 'Baixa' };
+export const confidenceLabel = (c: Confidence) => m().confidence[c];

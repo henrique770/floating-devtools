@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { defineMessages, intlTag } from '../i18n';
 import type { FocusTarget } from './focusContext';
 
 const HISTORY_KEY = 'ai.history';
@@ -67,14 +68,20 @@ export function titleFrom(question: string) {
   return line.length > 70 ? `${line.slice(0, 70)}…` : line;
 }
 
+const m = defineMessages({
+  pt: { now: 'agora', ago: (n: number, unit: string) => `há ${n} ${unit}` },
+  en: { now: 'just now', ago: (n, unit) => `${n} ${unit} ago` },
+});
+
 export function relativeTime(epoch: number) {
+  const t = m();
   const diff = Date.now() - epoch;
   const min = Math.round(diff / 60_000);
-  if (min < 1) return 'agora';
-  if (min < 60) return `há ${min} min`;
+  if (min < 1) return t.now;
+  if (min < 60) return t.ago(min, 'min');
   const h = Math.round(min / 60);
-  if (h < 24) return `há ${h} h`;
+  if (h < 24) return t.ago(h, 'h');
   const d = Math.round(h / 24);
-  if (d < 7) return `há ${d} d`;
-  return new Date(epoch).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' });
+  if (d < 7) return t.ago(d, 'd');
+  return new Date(epoch).toLocaleDateString(intlTag(), { day: '2-digit', month: 'short' });
 }

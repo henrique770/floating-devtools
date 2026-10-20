@@ -25,6 +25,10 @@ Abra `chrome://extensions` (ou `brave://extensions`), ative o **Modo do desenvol
 - `Alt+Shift+D` abre/fecha o painel. `Esc` fecha.
 - O ícone da extensão na barra mostra/oculta o botão em todos os sites.
 - Para redimensionar o painel, use o canto marcado; ou ⤢ para maximizar.
+- **⚙ Idioma**: Português ou English. O padrão é **Sistema**, que segue o idioma preferido do navegador/sistema
+  operacional (português para `pt-*`, inglês para os demais) e acompanha mudanças com a página aberta. O idioma vale
+  para toda a interface, os diagnósticos do Insights (recalculados na troca, sem perder os dispensados), o relatório de
+  bug e as respostas do assistente. Nome, descrição e atalho da extensão seguem o idioma do navegador (`public/_locales`).
 - **⚙ Aparência**: modo translúcido (vidro com blur e opacidade ajustável) e temas — Default, Dracula,
   Tokyo Night, Catppuccin, Gruvbox, Nord, Cyberpunk 2077, Evangelion e SynthWave '84; e claros: Atom One Light,
   Ayu Light, White & Black, GitHub Light, Solarized Light, Gruvbox Light, Rosé Pine Dawn e Catppuccin Latte. Para criar um tema,
@@ -129,7 +133,15 @@ Abra `chrome://extensions` (ou `brave://extensions`), ative o **Modo do desenvol
 
 Para criar uma regra de diagnóstico: implemente um `LogRule` ou `RequestRule` em `src/analysis/diagnostics/rules/`
 (retorne `null` quando não se aplica; coloque só fatos em `evidence` e as hipóteses em `causes`), registre-a em
-`rules/index.ts` e adicione casos positivos e negativos em `rules.test.ts`.
+`rules/index.ts` e adicione casos positivos e negativos em `rules.test.ts`. Os textos da regra vão em um
+`defineMessages` no próprio arquivo.
+
+**Traduções** (`src/i18n/`): cada módulo declara seus textos com `defineMessages({ pt: {...}, en: {...} })`, ao lado do
+código que os usa; mensagens com parâmetros são funções (`(n: number) => ...`). O TypeScript exige as mesmas chaves e
+assinaturas em todos os idiomas, então uma tradução faltando é erro de compilação. Leia o dicionário (`m()`) no momento
+em que o texto é produzido, nunca no carregamento do módulo; componentes memoizados chamam `useLocale()` para
+re-renderizar na troca. Para um novo idioma, adicione-o a `LOCALES`/`LOCALE_NAMES` e preencha os dicionários que o
+compilador apontar. Os testes rodam em português (`src/test/setup.ts`).
 
 ## Limitações (em relação ao DevTools nativo)
 

@@ -1,3 +1,5 @@
+import type { Locale } from '../i18n';
+
 /** AI providers (BYOK). All of them speak the OpenAI-compatible chat completions API. */
 
 export interface ProviderInfo {
@@ -49,7 +51,10 @@ export interface ChatMessage {
 export const AI_PORT = 'ai-chat';
 
 /** Content script -> background (over the AI_PORT port). */
-export type AiRequest = { kind: 'chat'; messages: ChatMessage[] } | { kind: 'test'; providerId: string; apiKey: string };
+/** `locale` words the background's error messages in the interface language. */
+export type AiRequest =
+  | { kind: 'chat'; messages: ChatMessage[]; locale?: Locale }
+  | { kind: 'test'; providerId: string; apiKey: string; locale?: Locale };
 
 /** Background -> content script (over the AI_PORT port). */
 export type AiResponse =

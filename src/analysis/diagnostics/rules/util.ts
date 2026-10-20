@@ -1,4 +1,5 @@
 import type { ConsoleEntry, NetworkEntry, SerializedValue } from '../../../shared/types';
+import { defineMessages } from '../../../i18n';
 import { originOfUrl, safeUrl } from '../../url';
 
 const clip = (s: string, n: number) => (s.length > n ? `${s.slice(0, n)}…` : s);
@@ -81,6 +82,24 @@ export function formatBytes(n: number): string {
   return `${(n / 1_000_000).toFixed(1)} MB`;
 }
 
-export const sourceLine = (entry: ConsoleEntry) => (entry.source ? `Origem: ${entry.source.label} (${safeUrl(entry.source.url.replace(/:\d+$/, ''), 120)})` : undefined);
+/** Texts shared by several rules. */
+export const common = defineMessages({
+  pt: {
+    source: (label: string, url: string) => `Origem: ${label} (${url})`,
+    message: (text: string) => `Mensagem: ${text}`,
+    thirdPartyHost: (host: string) => `Host de outra origem: ${host}`,
+    thirdPartyCode: 'O código que gerou o erro é de outra origem (terceiros).',
+    networkError: 'erro de rede',
+  },
+  en: {
+    source: (label, url) => `Source: ${label} (${url})`,
+    message: (text) => `Message: ${text}`,
+    thirdPartyHost: (host) => `Host from another origin: ${host}`,
+    thirdPartyCode: 'The code that raised the error comes from another origin (third party).',
+    networkError: 'network error',
+  },
+});
+
+export const sourceLine = (entry: ConsoleEntry) => (entry.source ? common().source(entry.source.label, safeUrl(entry.source.url.replace(/:\d+$/, ''), 120)) : undefined);
 
 export const compact = <T,>(list: (T | undefined | false | null)[]) => list.filter(Boolean) as T[];

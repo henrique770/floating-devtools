@@ -1,4 +1,40 @@
-import type { NetworkEntry, ResourceType } from '../shared/types';
+import { defineMessages } from '../i18n';
+import type { BodyNote, NetworkEntry, ResourceType } from '../shared/types';
+
+const m = defineMessages({
+  pt: {
+    stream: 'Stream (event-stream) não é capturado.',
+    tooLarge: 'Resposta muito grande para exibir.',
+    binary: (type: string) => `Conteúdo binário${type ? ` (${type})` : ''}.`,
+    unreadable: (err: string) => `Não foi possível ler o corpo: ${err}`,
+    unsupported: (what: string) => `${what} não é exibido.`,
+  },
+  en: {
+    stream: 'Streams (event-stream) are not captured.',
+    tooLarge: 'Response too large to display.',
+    binary: (type) => `Binary content${type ? ` (${type})` : ''}.`,
+    unreadable: (err) => `Could not read the body: ${err}`,
+    unsupported: (what) => `${what} is not displayed.`,
+  },
+});
+
+/** Why a response body is missing, in the current language. */
+export function bodyNoteText(note: BodyNote | undefined): string | undefined {
+  if (!note) return undefined;
+  const t = m();
+  switch (note.kind) {
+    case 'stream':
+      return t.stream;
+    case 'too-large':
+      return t.tooLarge;
+    case 'binary':
+      return t.binary(note.detail);
+    case 'unreadable':
+      return t.unreadable(note.detail);
+    case 'unsupported':
+      return t.unsupported(note.detail);
+  }
+}
 
 export function formatBytes(n: number | undefined): string {
   if (n === undefined || n < 0) return '—';

@@ -54,7 +54,7 @@ import {
       uiReady = true;
       queue.splice(0).forEach(dispatch);
     } else if (msg.kind === 'eval') {
-      evaluate(msg.code);
+      evaluate(msg.code, msg.blockedLabel);
     }
   });
   dispatch(JSON.stringify({ kind: 'hello' } satisfies PageMessage));
@@ -334,7 +334,7 @@ import {
     emitConsole('error', [event.reason], { prefix: 'Uncaught (in promise)' });
   });
 
-  function evaluate(code: string) {
+  function evaluate(code: string, blockedLabel = 'CSP blocked eval —') {
     const report = (level: ConsoleLevel, value: unknown, prefix?: string) =>
       emit({ kind: 'console', entry: { id: nextId('c'), level, args: [serialize(value)], time: Date.now(), prefix } });
     try {
@@ -350,7 +350,7 @@ import {
       }
     } catch (err) {
       const blocked = err instanceof EvalError || String(err).includes('Content Security Policy');
-      report('error', err, blocked ? 'CSP do site bloqueou eval —' : 'Uncaught');
+      report('error', err, blocked ? blockedLabel : 'Uncaught');
     }
   }
 
@@ -492,7 +492,7 @@ import {
             },
           });
           if (mimeType?.includes('event-stream')) {
-            emit({ kind: 'net', patch: { id, state: 'done', responseBodyNote: 'Stream (event-stream) não é capturado.' } });
+            emit({ kind: 'net', patch: { id, state: 'done', responseBodyNote: { kind: 'stream' } } });
             return;
           }
           res
@@ -502,10 +502,10 @@ import {
               const textual = TEXTUAL.test(mimeType ?? '') || !mimeType;
               const patch: NetworkPatch = { id, state: 'done', resourceSize: blob.size, duration: performance.now() - started };
               if (textual && blob.size <= MAX_BODY) patch.responseBody = await blob.text();
-              else patch.responseBodyNote = textual ? 'Resposta muito grande para exibir.' : `Conteúdo binário (${mimeType}).`;
+              else patch.responseBodyNote = textual ? { kind: 'too-large' } : { kind: 'binary', detail: mimeType ?? '' };
               emit({ kind: 'net', patch });
             })
-            .catch((err) => emit({ kind: 'net', patch: { id, state: 'done', responseBodyNote: `Não foi possível ler o corpo: ${err}` } }));
+            .catch((err) => emit({ kind: 'net', patch: { id, state: 'done', responseBodyNote: { kind: 'unreadable', detail: String(err) } } }));
         },
         (err) => {
           tagError(err, id);
@@ -594,12 +594,12 @@ import {
               patch.resourceSize = byteLength(text ?? '');
             } else if (rt === 'arraybuffer') {
               patch.resourceSize = (xhr.response as ArrayBuffer | null)?.byteLength;
-              patch.responseBodyNote = 'Conteúdo binário (arraybuffer).';
+              patch.responseBodyNote = { kind: 'binary', detail: 'arraybuffer' };
             } else if (rt === 'blob') {
               patch.resourceSize = (xhr.response as Blob | null)?.size;
-              patch.responseBodyNote = 'Conteúdo binário (blob).';
+              patch.responseBodyNote = { kind: 'binary', detail: 'blob' };
             } else {
-              patch.responseBodyNote = `responseType "${rt}" não é exibido.`;
+              patch.responseBodyNote = { kind: 'unsupported', detail: `responseType "${rt}"` };
             }
           } catch {
             /* ignore */

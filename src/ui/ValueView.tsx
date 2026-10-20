@@ -1,6 +1,12 @@
 import { useState } from 'react';
+import { defineMessages } from '../i18n';
 import type { SerializedValue } from '../shared/types';
 import { IconChevron } from './Icons';
+
+const m = defineMessages({
+  pt: { truncated: '… mais itens não exibidos' },
+  en: { truncated: '… more items not shown' },
+});
 
 type ObjectValue = Extract<SerializedValue, { t: 'object' }>;
 
@@ -121,7 +127,7 @@ function ObjectView({ value }: { value: ObjectValue }) {
               <ValueView value={child} />
             </span>
           ))}
-          {value.truncated && <span className="v-row v-null">… mais itens não exibidos</span>}
+          {value.truncated && <span className="v-row v-null">{m().truncated}</span>}
         </span>
       )}
     </span>

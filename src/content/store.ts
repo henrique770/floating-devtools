@@ -1,6 +1,7 @@
 import { DiagnosticsEngine } from '../analysis/diagnostics/engine';
 import { DEFAULT_INSIGHTS_CONFIG, type Diagnostic, type InsightsConfig } from '../analysis/diagnostics/types';
 import { LogGroupIndex, type LogGroup } from '../analysis/groups';
+import { onLocaleChange } from '../i18n';
 import { fromWebRequestType } from '../shared/resource-type';
 import type { ConsoleEntry, NetworkEntry, NetworkPatch, PageMessage, WebRequestInfo } from '../shared/types';
 
@@ -51,6 +52,11 @@ export class DevtoolsStore {
     pageOrigin = typeof location !== 'undefined' ? location.origin : '',
   ) {
     this.diagnostics = new DiagnosticsEngine(DEFAULT_INSIGHTS_CONFIG, pageOrigin);
+    // Diagnostic texts are written in the interface language when a rule runs: re-run them on a change.
+    onLocaleChange(() => {
+      this.rebuildDiagnostics();
+      this.schedule();
+    });
   }
 
   subscribe = (listener: () => void) => {

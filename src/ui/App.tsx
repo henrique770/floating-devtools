@@ -1,6 +1,7 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type PointerEvent as ReactPointerEvent } from 'react';
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type PointerEvent as ReactPointerEvent } from 'react';
 import { DEFAULT_INSIGHTS_CONFIG, type EventRef, type InsightsConfig } from '../analysis/diagnostics/types';
 import type { DevtoolsStore } from '../content/store';
+import { defineMessages, resolveLocale, setLocale, type LanguageSetting } from '../i18n';
 import { AssistantTab } from './AssistantTab';
 import { ConsoleTab } from './ConsoleTab';
 import { IconAssistant, IconClose, IconGear, IconMaximize, IconMinimize, Logo } from './Icons';
@@ -11,7 +12,37 @@ import { fontById, loadFont } from './fonts';
 import { isErrorEntry } from './format';
 import { DEFAULT_APPEARANCE, Settings, type Appearance, type SettingsSection } from './Settings';
 import { themeById, themeVars, typographyVars } from './themes';
+import { useLocale } from './useLocale';
 import { usePersistentState } from './usePersistentState';
+
+const m = defineMessages({
+  pt: {
+    fab: 'Floating DevTools — clique para abrir, arraste para mover',
+    open: 'Abrir Floating DevTools',
+    failedRequests: 'Requisições com falha ou status >= 400',
+    activeDiagnostics: 'Diagnósticos ativos (exceto informativos)',
+    dragBack: 'Arraste para mover · duplo clique para voltar ao botão',
+    drag: 'Arraste para mover',
+    settings: 'Configurações',
+    restore: 'Restaurar',
+    maximize: 'Maximizar',
+    close: 'Fechar (Esc)',
+    resize: 'Redimensionar',
+  },
+  en: {
+    fab: 'Floating DevTools — click to open, drag to move',
+    open: 'Open Floating DevTools',
+    failedRequests: 'Failed requests or status >= 400',
+    activeDiagnostics: 'Active diagnostics (excluding informational)',
+    dragBack: 'Drag to move · double-click to dock back to the button',
+    drag: 'Drag to move',
+    settings: 'Settings',
+    restore: 'Restore',
+    maximize: 'Maximize',
+    close: 'Close (Esc)',
+    resize: 'Resize',
+  },
+});
 
 const BUTTON = 40;
 const MARGIN = 12;
@@ -79,6 +110,18 @@ export function App({ store, onTogglePanelRequest }: Props) {
     if (insightsLoaded) store.setInsightsConfig(insights);
   }, [store, insights, insightsLoaded]);
 
+  // Language: "system" (default) follows the browser/OS preference, including changes while the page is open.
+  const [language, setLanguage, languageLoaded] = usePersistentState<LanguageSetting>('language', 'system');
+  useLayoutEffect(() => {
+    if (!languageLoaded) return;
+    setLocale(resolveLocale(language));
+    if (language !== 'system') return;
+    const onChange = () => setLocale(resolveLocale('system'));
+    window.addEventListener('languagechange', onChange);
+    return () => window.removeEventListener('languagechange', onChange);
+  }, [language, languageLoaded]);
+  useLocale();
+
   useEffect(() => {
     loadFont(fontById(appearance.font));
   }, [appearance.font]);
@@ -105,7 +148,7 @@ export function App({ store, onTogglePanelRequest }: Props) {
     [appearance],
   );
 
-  if (!enabled || !ratioLoaded) return null;
+  if (!enabled || !ratioLoaded || !languageLoaded) return null;
 
   return (
     <div className={`fdt-theme${appearance.boldErrors ? ' bold-errors' : ''}`} style={vars}>
@@ -129,6 +172,8 @@ export function App({ store, onTogglePanelRequest }: Props) {
           onInsights={setInsights}
           panelPos={panelPos}
           onPanelPos={setPanelPos}
+          language={language}
+          onLanguage={setLanguage}
         />
       )}
       <FloatingButton
@@ -202,8 +247,8 @@ function FloatingButton({ vp, position, open, errors, onClick, onDrop }: ButtonP
       type="button"
       className={`fdt-fab${drag ? ' is-dragging' : ''}${open ? ' is-open' : ''}`}
       style={{ left: pos.left, top: pos.top }}
-      title="Floating DevTools — clique para abrir, arraste para mover"
-      aria-label="Abrir Floating DevTools"
+      title={m().fab}
+      aria-label={m().open}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
@@ -283,9 +328,13 @@ interface PanelProps {
   onInsights: (c: InsightsConfig) => void;
   panelPos: { x: number; y: number } | null;
   onPanelPos: (pos: { x: number; y: number } | null) => void;
+  language: LanguageSetting;
+  onLanguage: (next: LanguageSetting) => void;
 }
 
-const Panel = memo(function Panel({ hidden, store, snap, vp, button, size, onResize, maximized, onToggleMaximized, tab, onTab, onClose, appearance, onAppearance, insights, onInsights, panelPos, onPanelPos }: PanelProps) {
+const Panel = memo(function Panel({ hidden, store, snap, vp, button, size, onResize, maximized, onToggleMaximized, tab, onTab, onClose, appearance, onAppearance, insights, onInsights, panelPos, onPanelPos, language, onLanguage }: PanelProps) {
+  useLocale();
+  const t = m();
   const [liveSize, setLiveSize] = useState<Size | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsSection, setSettingsSection] = useState<SettingsSection>('appearance');
@@ -431,7 +480,7 @@ const Panel = memo(function Panel({ hidden, store, snap, vp, button, size, onRes
             Network
             {requestCount > 0 && <span className="fdt-count">{requestCount}</span>}
             {requestErrors > 0 && (
-              <span className="fdt-count is-error" title="Requisições com falha ou status >= 400">
+              <span className="fdt-count is-error" title={t.failedRequests}>
                 {requestErrors}
               </span>
             )}
@@ -444,7 +493,7 @@ const Panel = memo(function Panel({ hidden, store, snap, vp, button, size, onRes
           <button type="button" role="tab" aria-selected={tab === 'insights'} className="fdt-tab" onClick={() => onTab('insights')}>
             Insights
             {notable.length > 0 && (
-              <span className={`fdt-count${notableHigh ? ' is-error' : ''}`} title="Diagnósticos ativos (exceto informativos)">
+              <span className={`fdt-count${notableHigh ? ' is-error' : ''}`} title={t.activeDiagnostics}>
                 {notable.length}
               </span>
             )}
@@ -456,7 +505,7 @@ const Panel = memo(function Panel({ hidden, store, snap, vp, button, size, onRes
         </div>
         <div
           className="fdt-drag-zone"
-          title={panelPos ? 'Arraste para mover · duplo clique para voltar ao botão' : 'Arraste para mover'}
+          title={panelPos ? t.dragBack : t.drag}
           onDoubleClick={() => onPanelPos(null)}
         />
         <div className="fdt-header-actions">
@@ -464,14 +513,14 @@ const Panel = memo(function Panel({ hidden, store, snap, vp, button, size, onRes
             type="button"
             className={`fdt-icon-btn fdt-gear${settingsOpen ? ' is-active' : ''}`}
             onClick={() => setSettingsOpen(!settingsOpen)}
-            title="Configurações"
+            title={t.settings}
           >
             <IconGear />
           </button>
-          <button type="button" className="fdt-icon-btn" onClick={onToggleMaximized} title={maximized ? 'Restaurar' : 'Maximizar'}>
+          <button type="button" className="fdt-icon-btn" onClick={onToggleMaximized} title={maximized ? t.restore : t.maximize}>
             {maximized ? <IconMinimize /> : <IconMaximize />}
           </button>
-          <button type="button" className="fdt-icon-btn" onClick={onClose} title="Fechar (Esc)">
+          <button type="button" className="fdt-icon-btn" onClick={onClose} title={t.close}>
             <IconClose />
           </button>
         </div>
@@ -486,6 +535,8 @@ const Panel = memo(function Panel({ hidden, store, snap, vp, button, size, onRes
             onSection={setSettingsSection}
             insights={insights}
             onInsights={onInsights}
+            language={language}
+            onLanguage={onLanguage}
           />
         )}
         <div className="fdt-tab-content" hidden={tab !== 'network'}>
@@ -508,7 +559,7 @@ const Panel = memo(function Panel({ hidden, store, snap, vp, button, size, onRes
           onPointerMove={onGripMove}
           onPointerUp={onGripUp}
           onPointerCancel={onGripUp}
-          title="Redimensionar"
+          title={t.resize}
         />
       )}
     </div>

@@ -1,6 +1,42 @@
 import { useState } from 'react';
+import { defineMessages, getLocale } from '../i18n';
 import { AI_PORT, PROVIDERS, type AiRequest, type AiResponse, type ProviderInfo } from '../shared/ai';
 import { useAiConfig } from './useAiConfig';
+
+const m = defineMessages({
+  pt: {
+    reloaded: 'A extensão foi recarregada. Atualize a página.',
+    unreachable: 'Não foi possível falar com a extensão.',
+    title: 'Providers de IA',
+    note: 'Traga sua própria API key. Ela fica salva só neste navegador e é usada direto pela extensão — nunca passa pela página. Ao perguntar, um resumo dos erros, avisos e requisições é enviado ao provider — sem headers, cookies, corpos de requisição ou valores de query string, e com tokens, chaves, senhas, e-mails, CPFs e cartões mascarados. Ao usar “Investigar com IA” em um item, vão também uma seleção de headers sem credenciais e trechos mascarados do payload e da resposta desse item. Você pode ver o texto exato em “Contexto” na aba Assistant.',
+    inUse: 'Em uso',
+    use: 'Usar no assistente',
+    noKey: 'Sem chave',
+    checking: 'Verificando…',
+    save: 'Salvar',
+    cancel: 'Cancelar',
+    change: 'Trocar',
+    remove: 'Remover',
+    model: 'Modelo',
+    getKey: (name: string) => `Obter uma API key da ${name} ↗`,
+  },
+  en: {
+    reloaded: 'The extension was reloaded. Refresh the page.',
+    unreachable: 'Could not reach the extension.',
+    title: 'AI providers',
+    note: 'Bring your own API key. It is stored only in this browser and used directly by the extension — it never goes through the page. When you ask, a summary of the errors, warnings and requests is sent to the provider — without headers, cookies, request bodies or query string values, and with tokens, keys, passwords, emails, CPFs and cards masked. When you use “Investigate with AI” on an item, a selection of headers without credentials and masked excerpts of that item’s payload and response are sent too. You can see the exact text under “Context” in the Assistant tab.',
+    inUse: 'In use',
+    use: 'Use in the assistant',
+    noKey: 'No key',
+    checking: 'Checking…',
+    save: 'Save',
+    cancel: 'Cancel',
+    change: 'Change',
+    remove: 'Remove',
+    model: 'Model',
+    getKey: (name) => `Get a ${name} API key ↗`,
+  },
+});
 
 const mask = (key: string) => (key.length > 10 ? `${key.slice(0, 3)}…${key.slice(-4)}` : '••••');
 
@@ -11,30 +47,26 @@ function testKey(providerId: string, apiKey: string): Promise<string | null> {
     try {
       port = chrome.runtime.connect({ name: AI_PORT });
     } catch {
-      resolve('A extensão foi recarregada. Atualize a página.');
+      resolve(m().reloaded);
       return;
     }
     port.onMessage.addListener((msg: AiResponse) => {
       port.disconnect();
       resolve(msg.kind === 'error' ? msg.message : null);
     });
-    port.onDisconnect.addListener(() => resolve('Não foi possível falar com a extensão.'));
-    port.postMessage({ kind: 'test', providerId, apiKey } satisfies AiRequest);
+    port.onDisconnect.addListener(() => resolve(m().unreachable));
+    port.postMessage({ kind: 'test', providerId, apiKey, locale: getLocale() } satisfies AiRequest);
   });
 }
 
 /** BYOK provider list shown in Settings > Assistente. */
 export function ProviderSettings() {
   const [config, setConfig] = useAiConfig();
+  const t = m();
   return (
     <>
-      <h3>Providers de IA</h3>
-      <p className="settings-hint settings-note">
-        Traga sua própria API key. Ela fica salva só neste navegador e é usada direto pela extensão — nunca passa pela página. Ao perguntar,
-        um resumo dos erros, avisos e requisições é enviado ao provider — sem headers, cookies, corpos de requisição ou valores de query string,
-        e com tokens, chaves, senhas, e-mails, CPFs e cartões mascarados. Ao usar “Investigar com IA” em um item, vão também uma seleção de headers sem credenciais e trechos mascarados do payload e da resposta
-        desse item. Você pode ver o texto exato em “Contexto” na aba Assistant.
-      </p>
+      <h3>{t.title}</h3>
+      <p className="settings-hint settings-note">{t.note}</p>
       <div className="provider-list">
         {PROVIDERS.map((p) => (
           <ProviderCard
@@ -89,6 +121,7 @@ function ProviderCard({ provider, apiKey, model, active, onChange, onActivate }:
   };
 
   const showForm = editing || !apiKey;
+  const t = m();
 
   return (
     <div className={`provider-card${active ? ' is-active' : ''}`}>
@@ -96,14 +129,14 @@ function ProviderCard({ provider, apiKey, model, active, onChange, onActivate }:
         <span className="provider-name">{provider.name}</span>
         {apiKey ? (
           active ? (
-            <span className="provider-badge is-on">Em uso</span>
+            <span className="provider-badge is-on">{t.inUse}</span>
           ) : (
             <button type="button" className="provider-badge" onClick={onActivate}>
-              Usar no assistente
+              {t.use}
             </button>
           )
         ) : (
-          <span className="provider-badge">Sem chave</span>
+          <span className="provider-badge">{t.noKey}</span>
         )}
       </div>
 
@@ -126,11 +159,11 @@ function ProviderCard({ provider, apiKey, model, active, onChange, onActivate }:
             aria-label={`API key ${provider.name}`}
           />
           <button type="submit" className="provider-btn is-primary" disabled={!draft.trim() || status.checking}>
-            {status.checking ? 'Verificando…' : 'Salvar'}
+            {status.checking ? t.checking : t.save}
           </button>
           {apiKey && (
             <button type="button" className="provider-btn" onClick={() => (setEditing(false), setStatus({}))}>
-              Cancelar
+              {t.cancel}
             </button>
           )}
         </form>
@@ -138,28 +171,28 @@ function ProviderCard({ provider, apiKey, model, active, onChange, onActivate }:
         <div className="provider-form">
           <code className="provider-key">{mask(apiKey)}</code>
           <button type="button" className="provider-btn" onClick={() => setEditing(true)}>
-            Trocar
+            {t.change}
           </button>
           <button type="button" className="provider-btn is-danger" onClick={() => onChange({ apiKey: '' })}>
-            Remover
+            {t.remove}
           </button>
         </div>
       )}
       {status.error && <p className="provider-error">{status.error}</p>}
 
       <div className="settings-row">
-        <span>Modelo</span>
-        <div className="segmented" role="radiogroup" aria-label="Modelo">
-          {provider.models.map((m) => (
-            <button key={m.id} type="button" role="radio" aria-checked={model === m.id} onClick={() => onChange({ model: m.id })} title={m.id}>
-              {m.label}
+        <span>{t.model}</span>
+        <div className="segmented" role="radiogroup" aria-label={t.model}>
+          {provider.models.map((x) => (
+            <button key={x.id} type="button" role="radio" aria-checked={model === x.id} onClick={() => onChange({ model: x.id })} title={x.id}>
+              {x.label}
             </button>
           ))}
         </div>
       </div>
       {!apiKey && (
         <a className="link-btn provider-link" href={provider.keyUrl} target="_blank" rel="noreferrer">
-          Obter uma API key da {provider.name} ↗
+          {t.getKey(provider.name)}
         </a>
       )}
     </div>

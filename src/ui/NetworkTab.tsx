@@ -8,6 +8,7 @@ import type { FocusTarget } from './focusContext';
 import { CorrelationList, logLabel } from './Correlations';
 import { Section } from './Section';
 import {
+  bodyNoteText,
   copyText,
   formatBytes,
   formatClock,
@@ -23,8 +24,100 @@ import {
   TYPE_FILTERS,
   typeLabel,
 } from './format';
+import { defineMessages } from '../i18n';
 import { IconAssistant, IconBack, IconClear, IconClose, IconCopy, IconRecord } from './Icons';
 import { JsonTree } from './ValueView';
+
+const m = defineMessages({
+  pt: {
+    stop: 'Parar gravação',
+    record: 'Gravar',
+    clear: 'Limpar',
+    filter: 'Filtrar (url, método, status; -texto inverte)',
+    type: 'Tipo',
+    errorsOnly: 'Só requisições com falha ou status >= 400',
+    pickOther: 'Selecione outra requisição para comparar com',
+    cancel: 'Cancelar',
+    noMatch: 'Nenhuma requisição corresponde ao filtro.',
+    recording: 'Gravando atividade de rede…',
+    paused: 'Gravação pausada.',
+    related: 'Relacionados',
+    closeDetails: 'Fechar detalhes',
+    compareTitle: 'Comparar esta requisição com outra da lista',
+    compare: '⇄ Comparar',
+    aiTitle: 'Investigar com IA: abre o Assistant focado nesta requisição e nos logs relacionados',
+    ai: 'IA',
+    none: 'Nenhum',
+    copied: 'Copiado!',
+    fromCache: 'Servido do cache',
+    startedAt: 'Iniciado em',
+    copyCurl: 'Copiar como cURL',
+    initiator: 'Iniciador',
+    noResponseHeaders: 'Não disponível (resposta opaca ou ainda pendente).',
+    pageHeadersOnly: 'Somente headers definidos pela página são visíveis para este tipo de requisição.',
+    copy: 'Copiar',
+    waiting: 'Aguardando resposta…',
+    noContent: 'Sem conteúdo.',
+    staticBody: 'O corpo de recursos estáticos (imagens, CSS, JS…) não é capturado. Use “Abrir em nova aba” para vê-lo.',
+    openTab: 'Abrir em nova aba ↗',
+    formatJson: 'Formatar JSON',
+    copyResponse: 'Copiar resposta',
+    noRelated: 'Nenhum erro ou aviso do console relacionado a esta requisição.',
+    confidenceNote:
+      'Alta: o erro é o mesmo objeto gerado por esta requisição. Média: stack em comum com o iniciador, ou erro de JSON logo após uma resposta que não é JSON. Baixa: só proximidade no tempo, o que não comprova relação.',
+    queue: 'Fila / Stalled',
+    connect: 'Conexão inicial',
+    ttfb: 'Aguardando servidor (TTFB)',
+    download: 'Download do conteúdo',
+    start: 'Início',
+    duration: 'Duração total',
+    noTiming: 'Detalhamento indisponível: recurso de outra origem sem o header',
+  },
+  en: {
+    stop: 'Stop recording',
+    record: 'Record',
+    clear: 'Clear',
+    filter: 'Filter (url, method, status; -text inverts)',
+    type: 'Type',
+    errorsOnly: 'Only failed requests or status >= 400',
+    pickOther: 'Select another request to compare with',
+    cancel: 'Cancel',
+    noMatch: 'No request matches the filter.',
+    recording: 'Recording network activity…',
+    paused: 'Recording paused.',
+    related: 'Related',
+    closeDetails: 'Close details',
+    compareTitle: 'Compare this request with another one in the list',
+    compare: '⇄ Compare',
+    aiTitle: 'Investigate with AI: opens the Assistant focused on this request and its related logs',
+    ai: 'AI',
+    none: 'None',
+    copied: 'Copied!',
+    fromCache: 'Served from cache',
+    startedAt: 'Started at',
+    copyCurl: 'Copy as cURL',
+    initiator: 'Initiator',
+    noResponseHeaders: 'Not available (opaque response or still pending).',
+    pageHeadersOnly: 'Only headers set by the page are visible for this kind of request.',
+    copy: 'Copy',
+    waiting: 'Waiting for response…',
+    noContent: 'No content.',
+    staticBody: 'The body of static resources (images, CSS, JS…) is not captured. Use “Open in new tab” to see it.',
+    openTab: 'Open in new tab ↗',
+    formatJson: 'Format JSON',
+    copyResponse: 'Copy response',
+    noRelated: 'No console error or warning related to this request.',
+    confidenceNote:
+      'High: the error is the same object produced by this request. Medium: stack shared with the initiator, or a JSON error right after a non-JSON response. Low: only closeness in time, which does not prove a relation.',
+    queue: 'Queue / Stalled',
+    connect: 'Initial connection',
+    ttfb: 'Waiting for server (TTFB)',
+    download: 'Content download',
+    start: 'Start',
+    duration: 'Total duration',
+    noTiming: 'Breakdown unavailable: cross-origin resource without the header',
+  },
+});
 
 type SortKey = 'start' | 'name' | 'status' | 'type' | 'size' | 'time';
 
@@ -138,6 +231,7 @@ export function NetworkTab({ store, requests, recording, width, focus, logs, onN
     return { transferred, resources, finish: visible.length ? last - first : 0 };
   }, [visible]);
 
+  const t = m();
   const toggleSort = (key: SortKey) =>
     setSort((s) => (s.key === key ? (s.dir === 1 ? { key, dir: -1 } : { key: 'start', dir: 1 }) : { key, dir: 1 }));
 
@@ -148,7 +242,7 @@ export function NetworkTab({ store, requests, recording, width, focus, logs, onN
           type="button"
           className={`fdt-icon-btn${recording ? ' is-active' : ''}`}
           onClick={() => store.toggleRecording()}
-          title={recording ? 'Parar gravação' : 'Gravar'}
+          title={recording ? t.stop : t.record}
         >
           <IconRecord active={recording} />
         </button>
@@ -157,18 +251,18 @@ export function NetworkTab({ store, requests, recording, width, focus, logs, onN
             setSelectedId(null);
             setCompare(null);
             setCompareBase(null);
-          }} title="Limpar">
+          }} title={t.clear}>
           <IconClear />
         </button>
         <input
           className="fdt-input"
-          placeholder="Filtrar (url, método, status; -texto inverte)"
+          placeholder={t.filter}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           spellCheck={false}
         />
       </div>
-      <div className="chips" role="radiogroup" aria-label="Tipo">
+      <div className="chips" role="radiogroup" aria-label={t.type}>
         {TYPE_FILTERS.map((f) => (
           <Fragment key={f.key}>
             <button type="button" role="radio" aria-checked={typeFilter === f.key} className="chip" onClick={() => setTypeFilter(f.key)}>
@@ -182,7 +276,7 @@ export function NetworkTab({ store, requests, recording, width, focus, logs, onN
                 aria-checked={errorsOnly}
                 className="chip chip-errors"
                 onClick={() => setErrorsOnly(!errorsOnly)}
-                title="Só requisições com falha ou status >= 400"
+                title={t.errorsOnly}
               >
                 Errors
               </button>
@@ -194,10 +288,10 @@ export function NetworkTab({ store, requests, recording, width, focus, logs, onN
       {base && (
         <div className="net-banner" role="status">
           <span className="ellipsis">
-            Selecione outra requisição para comparar com <b>{base.method} {shortName(base.url)}</b>
+            {t.pickOther} <b>{base.method} {shortName(base.url)}</b>
           </span>
           <button type="button" className="link-btn" onClick={() => setCompareBase(null)}>
-            Cancelar
+            {t.cancel}
           </button>
         </div>
       )}
@@ -224,7 +318,7 @@ export function NetworkTab({ store, requests, recording, width, focus, logs, onN
               ))}
               {!visible.length && (
                 <div className="empty">
-                  {requests.length ? 'Nenhuma requisição corresponde ao filtro.' : recording ? 'Gravando atividade de rede…' : 'Gravação pausada.'}
+                  {requests.length ? t.noMatch : recording ? t.recording : t.paused}
                 </div>
               )}
             </div>
@@ -312,6 +406,7 @@ interface DetailsProps {
 
 function Details({ entry, narrow, logs, onNavigate, onCompare, onInvestigate, onClose }: DetailsProps) {
   const [tab, setTab] = useState<DetailTab>('headers');
+  const t = m();
   const json = useMemo(() => tryParseJson(entry.responseBody), [entry.responseBody]);
   const hasPayload = !!entry.requestBody || entry.url.includes('?');
   const tabs: { key: DetailTab; label: string; show: boolean }[] = [
@@ -320,33 +415,33 @@ function Details({ entry, narrow, logs, onNavigate, onCompare, onInvestigate, on
     { key: 'preview', label: 'Preview', show: entry.type === 'image' || json !== undefined },
     { key: 'response', label: 'Response', show: true },
     { key: 'timing', label: 'Timing', show: true },
-    { key: 'related', label: 'Relacionados', show: true },
+    { key: 'related', label: t.related, show: true },
   ];
-  const current = tabs.find((t) => t.key === tab && t.show) ? tab : 'headers';
+  const current = tabs.find((x) => x.key === tab && x.show) ? tab : 'headers';
 
   return (
     <div className="detail">
       <div className="detail-tabs">
-        <button type="button" className="fdt-icon-btn" onClick={onClose} title="Fechar detalhes">
+        <button type="button" className="fdt-icon-btn" onClick={onClose} title={t.closeDetails}>
           {narrow ? <IconBack /> : <IconClose />}
         </button>
         {tabs
-          .filter((t) => t.show)
-          .map((t) => (
-            <button key={t.key} type="button" className="detail-tab" aria-selected={current === t.key} onClick={() => setTab(t.key)}>
-              {t.label}
+          .filter((x) => x.show)
+          .map((x) => (
+            <button key={x.key} type="button" className="detail-tab" aria-selected={current === x.key} onClick={() => setTab(x.key)}>
+              {x.label}
             </button>
           ))}
-        <button type="button" className="link-btn detail-compare" onClick={() => onCompare(entry.id)} title="Comparar esta requisição com outra da lista">
-          ⇄ Comparar
+        <button type="button" className="link-btn detail-compare" onClick={() => onCompare(entry.id)} title={t.compareTitle}>
+          {t.compare}
         </button>
         <button
           type="button"
           className="link-btn detail-ai"
           onClick={() => onInvestigate({ kind: 'request', id: entry.id })}
-          title="Investigar com IA: abre o Assistant focado nesta requisição e nos logs relacionados"
+          title={t.aiTitle}
         >
-          <IconAssistant size={12} /> IA
+          <IconAssistant size={12} /> {t.ai}
         </button>
       </div>
       <div className="detail-body">
@@ -371,7 +466,7 @@ function Details({ entry, narrow, logs, onNavigate, onCompare, onInvestigate, on
 }
 
 function KeyValues({ data }: { data: [string, string][] }) {
-  if (!data.length) return <div className="muted">Nenhum</div>;
+  if (!data.length) return <div className="muted">{m().none}</div>;
   return (
     <dl className="kv">
       {data.map(([k, v], i) => (
@@ -396,27 +491,28 @@ function CopyButton({ text, label }: { text: string; label: string }) {
         setTimeout(() => setDone(false), 1200);
       }}
     >
-      <IconCopy width={12} height={12} /> {done ? 'Copiado!' : label}
+      <IconCopy width={12} height={12} /> {done ? m().copied : label}
     </button>
   );
 }
 
 function HeadersView({ entry: e }: { entry: NetworkEntry }) {
+  const t = m();
   const general: [string, string][] = [
     ['Request URL', e.url],
     ['Request Method', e.method],
     ['Status Code', e.state === 'failed' ? `(failed) ${e.error ?? ''}` : `${e.status || '—'} ${e.statusText}`.trim()],
   ];
   if (e.remoteAddress) general.push(['Remote Address', e.remoteAddress]);
-  if (e.fromCache) general.push(['Cache', 'Servido do cache']);
-  general.push(['Iniciado em', formatClock(e.startTime)]);
+  if (e.fromCache) general.push(['Cache', t.fromCache]);
+  general.push([t.startedAt, formatClock(e.startTime)]);
   return (
     <>
-      <Section title="General" actions={<CopyButton text={toCurl(e)} label="Copiar como cURL" />}>
+      <Section title="General" actions={<CopyButton text={toCurl(e)} label={t.copyCurl} />}>
         <KeyValues data={general} />
       </Section>
       {e.initiator && (
-        <Section title="Iniciador">
+        <Section title={t.initiator}>
           <pre className="code-block initiator">{e.initiator}</pre>
         </Section>
       )}
@@ -424,14 +520,14 @@ function HeadersView({ entry: e }: { entry: NetworkEntry }) {
         {e.responseHeaders ? (
           <KeyValues data={Object.entries(e.responseHeaders)} />
         ) : (
-          <div className="muted">Não disponível (resposta opaca ou ainda pendente).</div>
+          <div className="muted">{t.noResponseHeaders}</div>
         )}
       </Section>
       <Section title="Request Headers">
         {e.requestHeaders && Object.keys(e.requestHeaders).length ? (
           <KeyValues data={Object.entries(e.requestHeaders)} />
         ) : (
-          <div className="muted">Somente headers definidos pela página são visíveis para este tipo de requisição.</div>
+          <div className="muted">{t.pageHeadersOnly}</div>
         )}
       </Section>
     </>
@@ -458,7 +554,7 @@ function PayloadView({ entry: e }: { entry: NetworkEntry }) {
         </Section>
       )}
       {e.requestBody && (
-        <Section title="Request Payload" actions={<CopyButton text={e.requestBody} label="Copiar" />}>
+        <Section title="Request Payload" actions={<CopyButton text={e.requestBody} label={m().copy} />}>
           {json !== undefined ? (
             <div className="code-block">
               <JsonTree data={json} />
@@ -476,18 +572,16 @@ function PayloadView({ entry: e }: { entry: NetworkEntry }) {
 
 function ResponseView({ entry: e, json }: { entry: NetworkEntry; json: unknown }) {
   const [pretty, setPretty] = useState(true);
-  if (e.state === 'pending' && !e.responseBody) return <div className="muted pad">Aguardando resposta…</div>;
+  const t = m();
+  if (e.state === 'pending' && !e.responseBody) return <div className="muted pad">{t.waiting}</div>;
   if (!e.responseBody) {
     return (
       <div className="muted pad">
-        {e.responseBodyNote ??
-          (e.type === 'fetch' || e.type === 'xhr'
-            ? 'Sem conteúdo.'
-            : 'O corpo de recursos estáticos (imagens, CSS, JS…) não é capturado. Use “Abrir em nova aba” para vê-lo.')}
+        {bodyNoteText(e.responseBodyNote) ?? (e.type === 'fetch' || e.type === 'xhr' ? t.noContent : t.staticBody)}
         {e.type !== 'fetch' && e.type !== 'xhr' && (
           <div style={{ marginTop: 8 }}>
             <a className="link-btn" href={e.url} target="_blank" rel="noreferrer">
-              Abrir em nova aba ↗
+              {t.openTab}
             </a>
           </div>
         )}
@@ -500,10 +594,10 @@ function ResponseView({ entry: e, json }: { entry: NetworkEntry; json: unknown }
       <div className="response-actions">
         {json !== undefined && (
           <label className="check">
-            <input type="checkbox" checked={pretty} onChange={(ev) => setPretty(ev.target.checked)} /> Formatar JSON
+            <input type="checkbox" checked={pretty} onChange={(ev) => setPretty(ev.target.checked)} /> {t.formatJson}
           </label>
         )}
-        <CopyButton text={e.responseBody} label="Copiar resposta" />
+        <CopyButton text={e.responseBody} label={t.copyResponse} />
       </div>
       <pre className="code-block">{text}</pre>
     </div>
@@ -520,26 +614,24 @@ function RelatedView({ entry, logs, onNavigate }: { entry: NetworkEntry; logs: C
         items={items}
         label={(ref) => logLabel(byId.get(ref.id))}
         onOpen={onNavigate}
-        empty="Nenhum erro ou aviso do console relacionado a esta requisição."
+        empty={m().noRelated}
       />
-      <p className="muted corr-note">
-        Alta: o erro é o mesmo objeto gerado por esta requisição. Média: stack em comum com o iniciador, ou erro de JSON logo após uma resposta que não
-        é JSON. Baixa: só proximidade no tempo, o que não comprova relação.
-      </p>
+      <p className="muted corr-note">{m().confidenceNote}</p>
     </div>
   );
 }
 
 function TimingView({ entry: e }: { entry: NetworkEntry }) {
   const t = e.timing;
+  const tx = m();
   const phases: [string, number, string][] = t
     ? [
-        ['Fila / Stalled', t.stalled, 'var(--t-stalled)'],
+        [tx.queue, t.stalled, 'var(--t-stalled)'],
         ['DNS Lookup', t.dns, 'var(--t-dns)'],
-        ['Conexão inicial', t.connect - t.ssl, 'var(--t-connect)'],
+        [tx.connect, t.connect - t.ssl, 'var(--t-connect)'],
         ['SSL', t.ssl, 'var(--t-ssl)'],
-        ['Aguardando servidor (TTFB)', t.waiting, 'var(--t-wait)'],
-        ['Download do conteúdo', t.download, 'var(--t-download)'],
+        [tx.ttfb, t.waiting, 'var(--t-wait)'],
+        [tx.download, t.download, 'var(--t-download)'],
       ]
     : [];
   const total = Math.max(e.duration ?? 0, phases.reduce((s, [, v]) => s + Math.max(0, v), 0)) || 1;
@@ -547,11 +639,11 @@ function TimingView({ entry: e }: { entry: NetworkEntry }) {
   return (
     <div className="timing pad">
       <div className="kv-row">
-        <dt>Início</dt>
+        <dt>{tx.start}</dt>
         <dd>{formatClock(e.startTime)}</dd>
       </div>
       <div className="kv-row">
-        <dt>Duração total</dt>
+        <dt>{tx.duration}</dt>
         <dd>{formatMs(e.duration)}</dd>
       </div>
       {t ? (
@@ -573,7 +665,7 @@ function TimingView({ entry: e }: { entry: NetworkEntry }) {
         </div>
       ) : (
         <div className="muted" style={{ marginTop: 10 }}>
-          Detalhamento indisponível: recurso de outra origem sem o header <code>Timing-Allow-Origin</code>.
+          {tx.noTiming} <code>Timing-Allow-Origin</code>.
         </div>
       )}
       <div className="muted" style={{ marginTop: 10 }}>

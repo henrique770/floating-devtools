@@ -1,0 +1,5 @@
+{
+  "description": { "message": "Network and Console in a floating, draggable button, without squeezing the page." },
+  "actionTitle": { "message": "Show/hide Floating DevTools" },
+  "togglePanel": { "message": "Open/close the panel" }
+}

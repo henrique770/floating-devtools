@@ -5,6 +5,7 @@
  *
  * Masked values become `[REDACTED:<kind>]`, so readers (and the model) know something was there.
  */
+import { defineMessages } from '../i18n';
 
 export type RedactionKind =
   | 'private-key'
@@ -128,19 +129,32 @@ export function redact(input: string): Redaction {
 
 export const redactText = (input: string) => redact(input).text;
 
-const KIND_LABEL: Record<RedactionKind, string> = {
-  'private-key': 'chave privada',
-  jwt: 'JWT',
-  token: 'token',
-  'api-key': 'chave de API',
-  credentials: 'credencial em URL',
-  secret: 'segredo',
-  email: 'e-mail',
-  cpf: 'CPF',
-  card: 'cartão',
-};
+const KIND_LABEL = defineMessages<Record<RedactionKind, string>>({
+  pt: {
+    'private-key': 'chave privada',
+    jwt: 'JWT',
+    token: 'token',
+    'api-key': 'chave de API',
+    credentials: 'credencial em URL',
+    secret: 'segredo',
+    email: 'e-mail',
+    cpf: 'CPF',
+    card: 'cartão',
+  },
+  en: {
+    'private-key': 'private key',
+    jwt: 'JWT',
+    token: 'token',
+    'api-key': 'API key',
+    credentials: 'credential in URL',
+    secret: 'secret',
+    email: 'email',
+    cpf: 'CPF',
+    card: 'card',
+  },
+});
 
 /** "2 JWT, 1 e-mail" */
 export function describeRedactions(found: Redaction['found']): string {
-  return (Object.entries(found) as [RedactionKind, number][]).map(([k, n]) => `${n} ${KIND_LABEL[k]}`).join(', ');
+  return (Object.entries(found) as [RedactionKind, number][]).map(([k, n]) => `${n} ${KIND_LABEL()[k]}`).join(', ');
 }

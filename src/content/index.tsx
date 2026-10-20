@@ -3,6 +3,7 @@
  * and mounts the React UI inside a closed-off Shadow DOM so page CSS cannot touch it.
  */
 import { createRoot } from 'react-dom/client';
+import { defineMessages } from '../i18n';
 import { TO_PAGE, TO_UI, type BackgroundMessage, type PageMessage, type UIMessage } from '../shared/types';
 import { App } from '../ui/App';
 import styles from '../ui/styles.css?inline';
@@ -10,7 +11,12 @@ import { DevtoolsStore } from './store';
 
 const sendToPage = (msg: UIMessage) => document.dispatchEvent(new CustomEvent(TO_PAGE, { detail: JSON.stringify(msg) }));
 
-const store = new DevtoolsStore((code) => sendToPage({ kind: 'eval', code }));
+const m = defineMessages({
+  pt: { cspBlocked: 'CSP do site bloqueou eval —' },
+  en: { cspBlocked: 'The site CSP blocked eval —' },
+});
+
+const store = new DevtoolsStore((code) => sendToPage({ kind: 'eval', code, blockedLabel: m().cspBlocked }));
 
 document.addEventListener(TO_UI, (event) => {
   let msg: PageMessage;

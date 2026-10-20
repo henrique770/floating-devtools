@@ -8,16 +8,117 @@ import { CorrelationList, logLabel, requestLabel, type EventLabel } from './Corr
 import type { FocusTarget } from './focusContext';
 import { formatClock, formatMs, isErrorEntry } from './format';
 import { IconAssistant, IconChevron } from './Icons';
-import { CATEGORY_LABEL, SEVERITY_LABEL } from './labels';
+import { defineMessages } from '../i18n';
+import { categoryLabel, severityLabel } from './labels';
 import { PerformancePanel } from './PerformancePanel';
 import { ReportView } from './ReportView';
+import { useLocale } from './useLocale';
 
+const m = defineMessages({
+  pt: {
+    relevant: 'Relevantes',
+    allSeverities: 'Todas as severidades',
+    filter: 'Filtrar diagnósticos',
+    category: 'Categoria',
+    allCategories: 'Todas as categorias',
+    severity: 'Severidade',
+    sort: 'Ordenar',
+    relevance: 'Relevância',
+    recent: 'Mais recentes',
+    reportTitle: 'Gerar um relatório de bug revisável com os problemas encontrados',
+    report: 'Relatório',
+    requests: 'Requisições',
+    failed: (n: number) => `${n} com falha`,
+    errors: 'Erros',
+    warnings: 'Avisos',
+    diagnostics: 'Diagnósticos',
+    slow: 'Lentas',
+    count: (n: number) => (n === 1 ? '1 diagnóstico' : `${n} diagnósticos`),
+    showDismissed: (n: number) => `Mostrar dispensados (${n})`,
+    none: 'Nenhum problema identificado até agora. Os diagnósticos aparecem aqui conforme a página gera erros e requisições.',
+    allDismissed: 'Todos os diagnósticos foram dispensados.',
+    noMatch: 'Nenhum diagnóstico corresponde ao filtro.',
+    footnote: 'Diagnósticos gerados localmente, sem IA, a partir do que foi capturado nesta página. Evidências são fatos observados; causas são hipóteses a confirmar.',
+    distribution: 'Distribuição por severidade',
+    filterBySeverity: 'Filtrar por severidade',
+    removeFilter: 'Remover filtro',
+    onlySeverity: (label: string) => `Mostrar só severidade ${label.toLowerCase()}`,
+    occurrences: (n: number) => (n === 1 ? '1 ocorrência' : `${n} ocorrências`),
+    evidence: 'Evidências',
+    evidenceHint: 'observado nos dados capturados',
+    causes: 'Possíveis causas',
+    causesHint: 'hipóteses, não confirmadas',
+    impact: 'Impacto potencial',
+    recommendations: 'Recomendações',
+    relatedEvents: 'Eventos relacionados',
+    shownOf: (shown: number, total: number) => `${shown} de ${total}`,
+    openIn: (tab: string) => `Abrir na aba ${tab}`,
+    gone: 'O evento não está mais retido',
+    relatedRequests: 'Requisições possivelmente relacionadas',
+    relatedLogs: 'Logs possivelmente relacionados',
+    relatedHint: 'à ocorrência mais recente, com o grau de confiança',
+    meta: (count: string, first: string, last: string) => `${count} · primeira ${first} · última ${last}`,
+    askTitle: 'Abre o Assistant focado neste diagnóstico e nos eventos relacionados. Nada é enviado até você escolher uma pergunta.',
+    ask: 'Investigar com IA',
+    reportOneTitle: 'Relatório de bug com este diagnóstico e os eventos dele',
+    restore: 'Restaurar',
+    dismiss: 'Dispensar',
+  },
+  en: {
+    relevant: 'Relevant',
+    allSeverities: 'All severities',
+    filter: 'Filter diagnostics',
+    category: 'Category',
+    allCategories: 'All categories',
+    severity: 'Severity',
+    sort: 'Sort',
+    relevance: 'Relevance',
+    recent: 'Most recent',
+    reportTitle: 'Generate a reviewable bug report with the problems found',
+    report: 'Report',
+    requests: 'Requests',
+    failed: (n) => `${n} failed`,
+    errors: 'Errors',
+    warnings: 'Warnings',
+    diagnostics: 'Diagnostics',
+    slow: 'Slow',
+    count: (n) => (n === 1 ? '1 diagnostic' : `${n} diagnostics`),
+    showDismissed: (n) => `Show dismissed (${n})`,
+    none: 'No problems found so far. Diagnostics show up here as the page produces errors and requests.',
+    allDismissed: 'All diagnostics were dismissed.',
+    noMatch: 'No diagnostic matches the filter.',
+    footnote: 'Diagnostics generated locally, without AI, from what was captured on this page. Evidence is observed fact; causes are hypotheses to confirm.',
+    distribution: 'Distribution by severity',
+    filterBySeverity: 'Filter by severity',
+    removeFilter: 'Remove filter',
+    onlySeverity: (label) => `Show only ${label.toLowerCase()} severity`,
+    occurrences: (n) => (n === 1 ? '1 occurrence' : `${n} occurrences`),
+    evidence: 'Evidence',
+    evidenceHint: 'observed in the captured data',
+    causes: 'Possible causes',
+    causesHint: 'hypotheses, not confirmed',
+    impact: 'Potential impact',
+    recommendations: 'Recommendations',
+    relatedEvents: 'Related events',
+    shownOf: (shown, total) => `${shown} of ${total}`,
+    openIn: (tab) => `Open in the ${tab} tab`,
+    gone: 'The event is no longer retained',
+    relatedRequests: 'Possibly related requests',
+    relatedLogs: 'Possibly related logs',
+    relatedHint: 'to the latest occurrence, with the confidence level',
+    meta: (count, first, last) => `${count} · first ${first} · last ${last}`,
+    askTitle: 'Opens the Assistant focused on this diagnostic and its related events. Nothing is sent until you pick a question.',
+    ask: 'Investigate with AI',
+    reportOneTitle: 'Bug report with this diagnostic and its events',
+    restore: 'Restore',
+    dismiss: 'Dismiss',
+  },
+});
 
-
-const SEVERITY_FILTERS: { key: string; label: string; match: (s: Severity) => boolean }[] = [
-  { key: 'relevant', label: 'Relevantes', match: (s) => s !== 'info' },
-  ...SEVERITIES.map((s) => ({ key: s, label: SEVERITY_LABEL[s], match: (x: Severity) => x === s })),
-  { key: 'all', label: 'Todas as severidades', match: () => true },
+const SEVERITY_FILTERS: { key: string; label: () => string; match: (s: Severity) => boolean }[] = [
+  { key: 'relevant', label: () => m().relevant, match: (s) => s !== 'info' },
+  ...SEVERITIES.map((s) => ({ key: s, label: () => severityLabel(s), match: (x: Severity) => x === s })),
+  { key: 'all', label: () => m().allSeverities, match: () => true },
 ];
 
 type Sort = 'relevance' | 'time';
@@ -124,54 +225,53 @@ export function InsightsTab({ store, snap, limits, onNavigate, onInvestigate }: 
   const ask = useCallback((d: Diagnostic) => onInvestigate({ kind: 'diagnostic', id: d.id }), [onInvestigate]);
   const reportOne = useCallback((d: Diagnostic) => setReport({ ids: [d.id] }), []);
 
+  const t = m();
   if (report) return <ReportView store={store} initialIds={report.ids} onClose={() => setReport(null)} />;
 
   return (
     <div className="ins">
       <div className="toolbar">
-        <input className="fdt-input" placeholder="Filtrar diagnósticos" value={query} onChange={(e) => setQuery(e.target.value)} spellCheck={false} />
-        <select className={`fdt-select${category !== 'all' ? ' is-set' : ''}`} value={category} onChange={(e) => setCategory(e.target.value)} aria-label="Categoria">
-          <option value="all">Todas as categorias</option>
+        <input className="fdt-input" placeholder={t.filter} value={query} onChange={(e) => setQuery(e.target.value)} spellCheck={false} />
+        <select className={`fdt-select${category !== 'all' ? ' is-set' : ''}`} value={category} onChange={(e) => setCategory(e.target.value)} aria-label={t.category}>
+          <option value="all">{t.allCategories}</option>
           {CATEGORIES.map((c) => (
             <option key={c} value={c}>
-              {CATEGORY_LABEL[c]}
+              {categoryLabel(c)}
             </option>
           ))}
         </select>
-        <select className={`fdt-select${severity !== 'relevant' ? ' is-set' : ''}`} value={severity} onChange={(e) => setSeverity(e.target.value)} aria-label="Severidade">
+        <select className={`fdt-select${severity !== 'relevant' ? ' is-set' : ''}`} value={severity} onChange={(e) => setSeverity(e.target.value)} aria-label={t.severity}>
           {SEVERITY_FILTERS.map((f) => (
             <option key={f.key} value={f.key}>
-              {f.label}
+              {f.label()}
             </option>
           ))}
         </select>
-        <select className="fdt-select" value={sort} onChange={(e) => setSort(e.target.value as Sort)} aria-label="Ordenar">
-          <option value="relevance">Relevância</option>
-          <option value="time">Mais recentes</option>
+        <select className="fdt-select" value={sort} onChange={(e) => setSort(e.target.value as Sort)} aria-label={t.sort}>
+          <option value="relevance">{t.relevance}</option>
+          <option value="time">{t.recent}</option>
         </select>
-        <button type="button" className="provider-btn ins-report-btn" onClick={() => setReport({})} title="Gerar um relatório de bug revisável com os problemas encontrados">
-          Relatório
+        <button type="button" className="provider-btn ins-report-btn" onClick={() => setReport({})} title={t.reportTitle}>
+          {t.report}
         </button>
       </div>
 
       <div className="ins-scroll">
         <div className="ins-stats">
-          <Stat label="Requisições" value={requests.length} note={stats.failed ? `${stats.failed} com falha` : undefined} noteTone="error" />
-          <Stat label="Erros" value={snap.errors} tone={snap.errors ? 'error' : undefined} />
-          <Stat label="Avisos" value={snap.warnings} tone={snap.warnings ? 'warn' : undefined} />
-          <Stat label="Diagnósticos" value={active.length} />
-          <Stat label="Lentas" value={stats.slow} note={`> ${formatMs(slowMs)}`} />
+          <Stat label={t.requests} value={requests.length} note={stats.failed ? t.failed(stats.failed) : undefined} noteTone="error" />
+          <Stat label={t.errors} value={snap.errors} tone={snap.errors ? 'error' : undefined} />
+          <Stat label={t.warnings} value={snap.warnings} tone={snap.warnings ? 'warn' : undefined} />
+          <Stat label={t.diagnostics} value={active.length} />
+          <Stat label={t.slow} value={stats.slow} note={`> ${formatMs(slowMs)}`} />
         </div>
         <SeverityBar counts={stats.bySeverity} selected={severity} onSelect={setSeverity} />
         <PerformancePanel requests={requests} limits={limits} onNavigate={onNavigate} />
 
         <div className="ins-list-head">
-          <span>
-            {visible.length} {visible.length === 1 ? 'diagnóstico' : 'diagnósticos'}
-          </span>
+          <span>{t.count(visible.length)}</span>
           {dismissedCount > 0 && (
             <label className="check">
-              <input type="checkbox" checked={showDismissed} onChange={(e) => setShowDismissed(e.target.checked)} /> Mostrar dispensados ({dismissedCount})
+              <input type="checkbox" checked={showDismissed} onChange={(e) => setShowDismissed(e.target.checked)} /> {t.showDismissed(dismissedCount)}
             </label>
           )}
         </div>
@@ -192,18 +292,11 @@ export function InsightsTab({ store, snap, limits, onNavigate, onInvestigate }: 
           ))}
           {!visible.length && (
             <div className="empty">
-              {!diagnostics.length
-                ? 'Nenhum problema identificado até agora. Os diagnósticos aparecem aqui conforme a página gera erros e requisições.'
-                : !active.length && !showDismissed
-                  ? 'Todos os diagnósticos foram dispensados.'
-                  : 'Nenhum diagnóstico corresponde ao filtro.'}
+              {!diagnostics.length ? t.none : !active.length && !showDismissed ? t.allDismissed : t.noMatch}
             </div>
           )}
         </div>
-        <p className="ins-footnote">
-          Diagnósticos gerados localmente, sem IA, a partir do que foi capturado nesta página. Evidências são fatos observados; causas são
-          hipóteses a confirmar.
-        </p>
+        <p className="ins-footnote">{t.footnote}</p>
       </div>
     </div>
   );
@@ -222,18 +315,19 @@ function Stat({ label, value, tone, note, noteTone }: { label: string; value: nu
 /** Share of each severity among active diagnostics. Legend items double as severity filters. */
 function SeverityBar({ counts, selected, onSelect }: { counts: Record<Severity, number>; selected: string; onSelect: (s: string) => void }) {
   const total = SEVERITIES.reduce((n, s) => n + counts[s], 0);
+  const t = m();
   return (
-    <div className="ins-sev-dist" aria-label="Distribuição por severidade">
-      <div className="ins-sev-bar" role="img" aria-label={SEVERITIES.map((s) => `${SEVERITY_LABEL[s]}: ${counts[s]}`).join(', ')}>
+    <div className="ins-sev-dist" aria-label={t.distribution}>
+      <div className="ins-sev-bar" role="img" aria-label={SEVERITIES.map((s) => `${severityLabel(s)}: ${counts[s]}`).join(', ')}>
         {total ? (
           SEVERITIES.filter((s) => counts[s]).map((s) => (
-            <span key={s} className={`ins-sev-seg sev-${s}`} style={{ flexGrow: counts[s] }} title={`${SEVERITY_LABEL[s]}: ${counts[s]}`} />
+            <span key={s} className={`ins-sev-seg sev-${s}`} style={{ flexGrow: counts[s] }} title={`${severityLabel(s)}: ${counts[s]}`} />
           ))
         ) : (
           <span className="ins-sev-seg is-empty" />
         )}
       </div>
-      <div className="ins-sev-legend" role="radiogroup" aria-label="Filtrar por severidade">
+      <div className="ins-sev-legend" role="radiogroup" aria-label={t.filterBySeverity}>
         {SEVERITIES.map((s) => (
           <button
             key={s}
@@ -242,10 +336,10 @@ function SeverityBar({ counts, selected, onSelect }: { counts: Record<Severity, 
             aria-checked={selected === s}
             className="ins-sev-key"
             onClick={() => onSelect(selected === s ? 'relevant' : s)}
-            title={selected === s ? 'Remover filtro' : `Mostrar só severidade ${SEVERITY_LABEL[s].toLowerCase()}`}
+            title={selected === s ? t.removeFilter : t.onlySeverity(severityLabel(s))}
           >
             <span className={`ins-swatch sev-${s}`} />
-            {SEVERITY_LABEL[s]} <b>{counts[s]}</b>
+            {severityLabel(s)} <b>{counts[s]}</b>
           </button>
         ))}
       </div>
@@ -266,34 +360,36 @@ interface ItemProps {
 }
 
 const DiagnosticItem = memo(function DiagnosticItem({ diagnostic: d, dismissed, open, details, onToggle, onDismiss, onNavigate, onAsk, onReport }: ItemProps) {
+  useLocale();
+  const t = m();
   return (
     <div className={`ins-item${open ? ' is-open' : ''}${dismissed ? ' is-dismissed' : ''}`}>
       <button type="button" className="ins-head" aria-expanded={open} onClick={() => onToggle(d.id)}>
         <IconChevron open={open} />
-        <span className={`ins-sev sev-${d.severity}`}>{SEVERITY_LABEL[d.severity]}</span>
+        <span className={`ins-sev sev-${d.severity}`}>{severityLabel(d.severity)}</span>
         <span className="ins-title">{d.title}</span>
         {d.count > 1 && (
-          <span className="fdt-count" title={`${d.count} ocorrências`}>
+          <span className="fdt-count" title={t.occurrences(d.count)}>
             {d.count}×
           </span>
         )}
-        <span className="ins-cat">{CATEGORY_LABEL[d.category]}</span>
+        <span className="ins-cat">{categoryLabel(d.category)}</span>
         <span className="ins-time">{formatClock(d.lastTime)}</span>
       </button>
       {!open && <div className="ins-summary">{d.description}</div>}
       {open && (
         <div className="ins-body">
           <p className="ins-desc">{d.description}</p>
-          <Block title="Evidências" hint="observado nos dados capturados" items={d.evidence} />
-          <Block title="Possíveis causas" hint="hipóteses, não confirmadas" items={d.causes} />
-          <h4>Impacto potencial</h4>
+          <Block title={t.evidence} hint={t.evidenceHint} items={d.evidence} />
+          <Block title={t.causes} hint={t.causesHint} items={d.causes} />
+          <h4>{t.impact}</h4>
           <p>{d.impact}</p>
-          <Block title="Recomendações" items={d.recommendations} />
+          <Block title={t.recommendations} items={d.recommendations} />
           {details && details.related.length > 0 && (
             <>
               <h4>
-                Eventos relacionados{' '}
-                <span className="ins-hint">{d.related.length > details.related.length ? `${details.related.length} de ${d.related.length}` : details.related.length}</span>
+                {t.relatedEvents}{' '}
+                <span className="ins-hint">{d.related.length > details.related.length ? t.shownOf(details.related.length, d.related.length) : details.related.length}</span>
               </h4>
               <ul className="ins-related">
                 {details.related.map((r) => (
@@ -303,7 +399,7 @@ const DiagnosticItem = memo(function DiagnosticItem({ diagnostic: d, dismissed, 
                       className={`ins-related-btn${r.error ? ' is-error' : ''}`}
                       disabled={!r.available}
                       onClick={() => onNavigate(r.ref)}
-                      title={r.available ? `Abrir na aba ${r.ref.kind === 'request' ? 'Network' : 'Console'}` : 'O evento não está mais retido'}
+                      title={r.available ? t.openIn(r.ref.kind === 'request' ? 'Network' : 'Console') : t.gone}
                     >
                       <span className="ins-related-kind">{r.ref.kind === 'request' ? 'NET' : 'LOG'}</span>
                       <span className="ellipsis">{r.text}</span>
@@ -316,24 +412,23 @@ const DiagnosticItem = memo(function DiagnosticItem({ diagnostic: d, dismissed, 
           {details && (
             <>
               <h4>
-                {d.related[0]?.kind === 'log' ? 'Requisições possivelmente relacionadas' : 'Logs possivelmente relacionados'}{' '}
-                <span className="ins-hint">à ocorrência mais recente, com o grau de confiança</span>
+                {d.related[0]?.kind === 'log' ? t.relatedRequests : t.relatedLogs} <span className="ins-hint">{t.relatedHint}</span>
               </h4>
               <CorrelationList items={details.correlations} label={details.label} onOpen={onNavigate} />
             </>
           )}
           <p className="ins-meta">
-            {d.count} {d.count === 1 ? 'ocorrência' : 'ocorrências'} · primeira {formatClock(d.firstTime)} · última {formatClock(d.lastTime)}
+            {t.meta(t.occurrences(d.count), formatClock(d.firstTime), formatClock(d.lastTime))}
           </p>
           <div className="ins-actions">
-            <button type="button" className="provider-btn is-primary" onClick={() => onAsk(d)} title="Abre o Assistant focado neste diagnóstico e nos eventos relacionados. Nada é enviado até você escolher uma pergunta.">
-              <IconAssistant size={13} /> Investigar com IA
+            <button type="button" className="provider-btn is-primary" onClick={() => onAsk(d)} title={t.askTitle}>
+              <IconAssistant size={13} /> {t.ask}
             </button>
-            <button type="button" className="provider-btn" onClick={() => onReport(d)} title="Relatório de bug com este diagnóstico e os eventos dele">
-              Relatório
+            <button type="button" className="provider-btn" onClick={() => onReport(d)} title={t.reportOneTitle}>
+              {t.report}
             </button>
             <button type="button" className="provider-btn" onClick={() => onDismiss(d.id, !dismissed)}>
-              {dismissed ? 'Restaurar' : 'Dispensar'}
+              {dismissed ? t.restore : t.dismiss}
             </button>
           </div>
         </div>
@@ -350,8 +445,8 @@ function Block({ title, hint, items }: { title: string; hint?: string; items: st
         {title} {hint && <span className="ins-hint">{hint}</span>}
       </h4>
       <ul>
-        {items.map((t, i) => (
-          <li key={i}>{t}</li>
+        {items.map((item, i) => (
+          <li key={i}>{item}</li>
         ))}
       </ul>
     </>
